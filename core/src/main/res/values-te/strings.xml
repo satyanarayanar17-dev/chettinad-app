@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">చెట్టినాడ్ కేర్</string>
+    <!-- Telugu string translations for UI -->
+    <string name="login_title">లాగిన్ (Login)</string>
+    <string name="username">స్టాఫ్ ఐడి (Staff ID)</string>
+    <string name="password">పాస్వర్డ్ (PIN)</string>
+    <string name="login_button">లాగిన్</string>
+</resources>

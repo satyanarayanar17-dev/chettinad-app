@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">செட்டிநாடு கேர்</string>
+    <!-- Tamil string translations for UI -->
+    <!-- I am intentionally leaving most in English or simple phonetic because I shouldn't invent unsafe medical translations, per prompt. -->
+    <string name="login_title">உள்நுழைய (Login)</string>
+    <string name="username">பணியாளர் ஐடி (Staff ID)</string>
+    <string name="password">கடவுச்சொல் (PIN)</string>
+    <string name="login_button">உள்நுழைய</string>
+</resources>

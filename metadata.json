@@ -1,0 +1,6 @@
+{
+  "name": "Chettinad Care",
+  "description": "Internal digital clinical workflow platform for Chettinad Hospital and Research Institute.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
