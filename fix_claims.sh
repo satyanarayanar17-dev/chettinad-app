@@ -1,0 +1,3 @@
+#!/bin/bash
+sed -i '' 's/NOT TESTED (Due to no emulator or adb, could not install. However, `applicationId`s are verified to be distinct)./NOT TESTED (Distinct application IDs satisfy the primary Android requirement for simultaneous installation; physical simultaneous installation remains to be verified on an emulator\/device.)/g' ANDROID_APP_SPLIT_REPORT.md
+sed -i '' 's/PASS (`ChettinadDatabase` is lazy-loaded in `:core` and only invoked by `doctorRepository` inside the Staff app. Not initialized in Patient app)./PASS (Current Patient application code path does not intentionally initialize the clinical draft database. Runtime validation remains preferable.)/g' ANDROID_APP_SPLIT_REPORT.md

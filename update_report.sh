@@ -1,0 +1,3 @@
+#!/bin/bash
+sed -i '' 's/## Existing Test Count Before Split/## Test Inventory\n\n* **Test Source Files**: 9\n* **Total `@Test` Methods**: 17\n* **Core Tests**: 6 (`AuthRefreshTest`, `ChettinadApiContractTest`, `ExampleUnitTest`, `ExampleInstrumentedTest`)\n* **Patient Tests**: 5 (`AuthScreenTest`, `PatientRoleIsolationTest`)\n* **Staff Tests**: 6 (`AuthScreenTest`, `ClinicalNoteConflictTest`, `StaffRoleIsolationTest`)\n\n## Existing Test Count Before Split/g' ANDROID_APP_SPLIT_REPORT.md
+sed -i '' 's/## Test Count After Split\n11 (Including 2 newly added test files for explicit Role Isolation: `PatientRoleIsolationTest.kt` and `StaffRoleIsolationTest.kt`)/## Test Count After Split\n17 actual executable tests across 9 files/g' ANDROID_APP_SPLIT_REPORT.md
