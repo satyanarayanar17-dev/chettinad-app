@@ -1,0 +1,93 @@
+openapi: 3.0.3
+info:
+  title: Chettinad Care Android Required API
+  description: >
+    PROPOSED CONTRACT — REQUIRES BACKEND VALIDATION.
+    This OpenAPI spec represents the capabilities required by the Android client. 
+    It is NOT the confirmed production backend specification.
+  version: 1.0.0
+servers:
+  - url: https://staging.placeholder/api
+    description: Proposed Staging Server
+paths:
+  /auth/login:
+    post:
+      summary: User Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Successful login
+          content:
+            application/json:
+              schema:
+                type: object
+  /clinical/notes:
+    post:
+      summary: Save Clinical Note
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Saved successfully
+  /clinical/notes/{id}:
+    put:
+      summary: Update Clinical Note
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: If-Match
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Updated successfully
+        '409':
+          description: Version conflict (Stale ETag)
+        '412':
+          description: Precondition failed (Stale ETag)
+  /clinical/prescriptions:
+    post:
+      summary: Create Prescription
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Created successfully

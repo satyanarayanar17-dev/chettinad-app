@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Chettinad Care</string>
+    <string name="login_title">Chettinad Care</string>
+    <string name="username">Patient ID / Username</string>
+    <string name="password">PIN / Password</string>
+    <string name="login_button">Patient Login</string>
+</resources>

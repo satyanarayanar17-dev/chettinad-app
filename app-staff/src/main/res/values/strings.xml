@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Chettinad Care Staff</string>
+    <string name="login_title">Chettinad Care Staff</string>
+    <string name="username">Staff ID / Username</string>
+    <string name="password">Secure PIN</string>
+    <string name="login_button">Secure Login</string>
+</resources>
