@@ -1,0 +1,83 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-version: '9.3.1'
+
+    - name: Run Core Tests
+      run: gradle :core:testDemoDebugUnitTest
+
+    - name: Run Patient Tests
+      run: gradle :app-patient:testDemoDebugUnitTest
+
+    - name: Run Staff Tests
+      run: gradle :app-staff:testDemoDebugUnitTest
+
+    - name: Build Patient Demo Debug APK
+      run: gradle :app-patient:assembleDemoDebug
+
+    - name: Build Staff Demo Debug APK
+      run: gradle :app-staff:assembleDemoDebug
+
+    - name: Rename Patient APK
+      run: |
+        PATIENT_APK=$(find app-patient/build/outputs/apk -name "*.apk" | head -n 1)
+        if [ -n "$PATIENT_APK" ]; then
+          mv "$PATIENT_APK" Chettinad-Care-Patient-demo.apk
+        else
+          echo "Patient APK not found"
+          exit 1
+        fi
+
+    - name: Rename Staff APK
+      run: |
+        STAFF_APK=$(find app-staff/build/outputs/apk -name "*.apk" | head -n 1)
+        if [ -n "$STAFF_APK" ]; then
+          mv "$STAFF_APK" Chettinad-Care-Staff-demo.apk
+        else
+          echo "Staff APK not found"
+          exit 1
+        fi
+
+    - name: Generate Checksums
+      run: |
+        sha256sum Chettinad-Care-Patient-demo.apk Chettinad-Care-Staff-demo.apk > SHA256SUMS.txt
+        cat SHA256SUMS.txt
+
+    - name: Upload Patient APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: Chettinad-Care-Patient-Demo
+        path: Chettinad-Care-Patient-demo.apk
+
+    - name: Upload Staff APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: Chettinad-Care-Staff-Demo
+        path: Chettinad-Care-Staff-demo.apk
+
+    - name: Upload Checksums
+      uses: actions/upload-artifact@v4
+      with:
+        name: SHA256SUMS
+        path: SHA256SUMS.txt
