@@ -65,6 +65,23 @@ class PortalContractTest {
             body.toResponseBody("application/json".toMediaType())))
         assertTrue(errorMessage(error).contains("Synthetic medicine"))
     }
+    @Test fun `weekly task edits preserve the prescribed recurrence and response window`() {
+        val existing = CareTask("task", "Medication", "Original instruction", "MEDICATION", "ACTIVE", 2, "08:00", "2026-10-15", frequency_type = "SELECTED_DAYS", weekdays_mask = 42, window_before_minutes = 10, window_after_minutes = 30, expected_duration_minutes = 20, reminder_enabled = false)
+        val payload = mutableMapOf<String, Any>("frequency_type" to "DAILY", "instruction" to "Clarified instruction")
+        preserveRecurrence(payload, existing)
+        assertEquals("SELECTED_DAYS", payload["frequency_type"])
+        assertEquals(42, payload["weekdays_mask"])
+        assertEquals(30, payload["window_after_minutes"])
+        assertEquals(20, payload["expected_duration_minutes"]); assertEquals(false, payload["reminder_enabled"])
+        assertEquals("Clarified instruction", payload["instruction"])
+    }
+    @Test fun `one-off task edits retain the occurrence date`() {
+        val existing = CareTask("task", "Task", "Instruction", "ACTIVITY", "ACTIVE", 1, "08:00", "2026-10-15", frequency_type = "ONCE", one_time_date = "2026-10-20")
+        val payload = mutableMapOf<String, Any>("frequency_type" to "DAILY")
+        preserveRecurrence(payload, existing)
+        assertEquals("ONCE", payload["frequency_type"]); assertEquals("2026-10-20", payload["one_time_date"])
+        assertFalse(payload.containsKey("weekdays_mask"))
+    }
     @Test fun `date validation rejects impossible calendar dates`() {
         assertTrue(validDate("2024-02-29")); assertFalse(validDate("2026-02-29")); assertFalse(validDate("2026-2-01"))
     }

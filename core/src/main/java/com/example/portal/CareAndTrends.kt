@@ -82,15 +82,16 @@ import com.example.domain.model.Role
         Field("Title", title, { title = it }, !state.busy); Field("Instruction", instruction, { instruction = it }, !state.busy, 2)
         Field("Daily time (HH:MM)", time, { time = it }, !state.busy); Field("Start date (YYYY-MM-DD)", date, { date = it }, !state.busy)
         if (kind == "MEASUREMENT") {
-            ChoiceRow(listOf("GLUCOSE", "WEIGHT", "TEMPERATURE", "PULSE", "SPO2"), observation, { observation = it }, !state.busy)
+            ChoiceRow(listOf("GLUCOSE", "WEIGHT", "TEMPERATURE", "PULSE", "SPO2"), observation, { observation = it; unit = mapOf("GLUCOSE" to "mg/dL", "WEIGHT" to "kg", "TEMPERATURE" to "°C", "PULSE" to "bpm", "SPO2" to "%")[it].orEmpty(); timing = if (it == "GLUCOSE") "FASTING" else "SCHEDULED" }, !state.busy)
             Field("Timing relation", timing, { timing = it }, !state.busy); Field("Unit", unit, { unit = it }, !state.busy)
         }
         if (kind in listOf("MEDICATION", "INSULIN")) state.care.available_prescription_items.filter { it.prescription_version == it.current_prescription_version }.forEach { item ->
             FilterChip(selected = source == item.id, onClick = { source = item.id }, label = { Text("${item.drug_name} ${item.strength.orEmpty()} · ${item.dose} · ${item.frequency}") })
         }
-        if (existing != null) Field("Reason for change", reason, { reason = it }, !state.busy)
+        if (existing != null) { Text("Existing recurrence: ${label(existing.frequency_type)}. This revision keeps its recurrence and response window."); Field("Reason for change", reason, { reason = it }, !state.busy) }
         Button(onClick = {
             val task = mutableMapOf<String, Any>("task_type" to kind, "title" to title, "instruction" to instruction, "frequency_type" to "DAILY", "scheduled_time" to time, "start_date" to date)
+            preserveRecurrence(task, existing)
             if (kind == "MEASUREMENT") { task["observation_type"] = observation; task["timing_relation"] = timing; task["target_unit"] = unit }
             if (kind in listOf("MEDICATION", "INSULIN")) task["prescription_item_id"] = source
             vm.action("Care task updated") {
@@ -167,4 +168,18 @@ import com.example.domain.model.Role
         confirm = false
         vm.action("Task stopped") { vm.api.changeTask(task.id, mapOf("__v" to requireNotNull(state.care.plan).__v, "expected_revision" to task.revision, "action" to "DEACTIVATE", "effective_date" to date, "reason" to reason)); vm.reloadCare() }
     })
+}
+
+/** Instruction edits must not silently turn weekly/one-off medication schedules into daily doses. */
+internal fun preserveRecurrence(task: MutableMap<String, Any>, existing: CareTask?) {
+    if (existing == null) return
+    task["frequency_type"] = existing.frequency_type
+    existing.weekdays_mask?.let { task["weekdays_mask"] = it }
+    existing.interval_days?.let { task["interval_days"] = it }
+    existing.one_time_date?.let { task["one_time_date"] = it }
+    existing.end_date?.let { task["end_date"] = it }
+    task["window_before_minutes"] = existing.window_before_minutes
+    task["window_after_minutes"] = existing.window_after_minutes
+    existing.expected_duration_minutes?.let { task["expected_duration_minutes"] = it }
+    task["reminder_enabled"] = existing.reminder_enabled == true || existing.reminder_enabled == 1 || existing.reminder_enabled == 1.0
 }
