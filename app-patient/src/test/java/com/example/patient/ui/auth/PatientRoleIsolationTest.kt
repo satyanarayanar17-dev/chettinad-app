@@ -1,5 +1,6 @@
 package com.example.patient.ui.auth
 
+import com.example.data.api.OtpRequestResponse
 import com.example.data.repository.AuthRepository
 import com.example.domain.model.Role
 import com.example.domain.model.User
@@ -46,7 +47,7 @@ class PatientRoleIsolationTest {
 
     private fun mockLoginResponse(role: Role): User {
         val user = User(id = "1", name = "Test", role = role, isActive = true)
-        coEvery { authRepository.login(any()) } returns Result.success(user)
+        coEvery { authRepository.verifyPatientOtp(any(), any(), any(), any()) } returns Result.success(user)
         return user
     }
 
@@ -54,7 +55,10 @@ class PatientRoleIsolationTest {
     fun `PATIENT role is allowed in Patient app`() = runTest {
         mockLoginResponse(Role.PATIENT)
         
-        viewModel.login("user", "pass")
+        coEvery { authRepository.requestPatientOtp(any()) } returns Result.success(OtpRequestResponse(true, 300))
+        viewModel.requestOtp("9876543210")
+        advanceUntilIdle()
+        viewModel.verifyOtp("123456")
         advanceUntilIdle()
         
         val state = viewModel.uiState.value
@@ -67,7 +71,10 @@ class PatientRoleIsolationTest {
     fun `DOCTOR role is rejected in Patient app`() = runTest {
         mockLoginResponse(Role.DOCTOR)
         
-        viewModel.login("user", "pass")
+        coEvery { authRepository.requestPatientOtp(any()) } returns Result.success(OtpRequestResponse(true, 300))
+        viewModel.requestOtp("9876543210")
+        advanceUntilIdle()
+        viewModel.verifyOtp("123456")
         advanceUntilIdle()
         
         val state = viewModel.uiState.value
@@ -80,7 +87,10 @@ class PatientRoleIsolationTest {
     fun `NURSE role is rejected in Patient app`() = runTest {
         mockLoginResponse(Role.NURSE)
         
-        viewModel.login("user", "pass")
+        coEvery { authRepository.requestPatientOtp(any()) } returns Result.success(OtpRequestResponse(true, 300))
+        viewModel.requestOtp("9876543210")
+        advanceUntilIdle()
+        viewModel.verifyOtp("123456")
         advanceUntilIdle()
         
         val state = viewModel.uiState.value
@@ -93,7 +103,10 @@ class PatientRoleIsolationTest {
     fun `ADMIN role is rejected in Patient app`() = runTest {
         mockLoginResponse(Role.ADMIN)
         
-        viewModel.login("user", "pass")
+        coEvery { authRepository.requestPatientOtp(any()) } returns Result.success(OtpRequestResponse(true, 300))
+        viewModel.requestOtp("9876543210")
+        advanceUntilIdle()
+        viewModel.verifyOtp("123456")
         advanceUntilIdle()
         
         val state = viewModel.uiState.value

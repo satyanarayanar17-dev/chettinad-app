@@ -3,6 +3,7 @@ package com.example.patient.navigation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -30,6 +31,12 @@ fun PatientApp(appContainer: AppContainer) {
     )
     val authState by authViewModel.uiState.collectAsState()
 
+    LaunchedEffect(authState.user) {
+        if (authState.user == null && navController.currentDestination?.route != "auth") {
+            navController.navigate("auth") { popUpTo(0) }
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = if (authState.user != null) "patient/home" else "auth"
@@ -37,15 +44,16 @@ fun PatientApp(appContainer: AppContainer) {
         composable("auth") {
             LoginScreen(
                 uiState = authState,
-                onLogin = authViewModel::login,
+                onRequestOtp = authViewModel::requestOtp,
+                onVerifyOtp = authViewModel::verifyOtp,
+                onChangePhone = authViewModel::changePhone,
                 onLoginSuccess = { role ->
                     if (role == Role.PATIENT) {
                         navController.navigate("patient/home") {
                             popUpTo("auth") { inclusive = true }
                         }
                     }
-                },
-                onErrorDismiss = authViewModel::dismissError
+                }
             )
         }
 
