@@ -58,16 +58,16 @@ Local final verification passed:
 
 | Suite | Passed | Failed | Skipped |
 | --- | ---: | ---: | ---: |
-| Core contracts, state and native UI | 19 | 0 | 0 |
+| Core contracts, state and native UI | 21 | 0 | 0 |
 | Patient | 7 | 0 | 0 |
 | Staff | 6 | 0 | 0 |
-| Total | 32 | 0 | 0 |
+| Total | 34 | 0 | 0 |
 
 Both APKs and the instrumentation test APK build successfully. Both application signatures verify with `apksigner`; package IDs are distinct, minSdk 24 and targetSdk 36. Rendered Patient Home and Staff Queue screens were inspected and the bottom-navigation labels corrected for compact widths.
 
 The backend's patient portal/document, care-plan and authentication/session suites pass against isolated synthetic SQLite databases. The additional OTP suite passes 16 tests, including the production route with simulated external SMS transport. None of these tests sent real SMS or changed the deployed database.
 
-Android Keystore persistence is tested on a real Android emulator in CI rather than mocked on the JVM. Installation/launcher and side-by-side coexistence checks are configured in the same CI workflow. Their current run status is recorded on PR #1; physical-handset acceptance and Google Play release signing remain separate from debug APK builds.
+Android Keystore persistence passed both native tests on an Android 35 emulator in CI. The initial launcher run installed both apps and captured both login screens, but its staff assertion used `Password / PIN` instead of the actual `Password / Secure PIN` label. The corrected check requires each app's own package, title, input label and sign-in action, verifies launch status/process presence and both installed package IDs, and captures screenshots/logs on failure. Replaying the recovered screen dumps confirms it accepts the correct screens and rejects a wrong screen, a missing package and a failed launch. The full emulator rerun status is recorded on PR #1; physical-handset acceptance and Google Play release signing remain separate from debug APK builds.
 
 The iOS-configured server health check reported a development SQLite fixture, not a production PostgreSQL deployment. The Android code does not change that deployment. Real-patient acceptance still needs production configuration/SMS delivery plus physical-device workflow checks.
 
