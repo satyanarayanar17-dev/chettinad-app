@@ -21,7 +21,11 @@ import com.example.portal.CareReminders
     else key(user.id) {
         val store = remember { ViewModelStore() }
         val owner = remember { object : ViewModelStoreOwner { override val viewModelStore = store } }
-        DisposableEffect(store) { onDispose { store.clear() } }
+        DisposableEffect(store) { onDispose {
+            store.clear()
+            CareReminders.cancel(context)
+            java.io.File(context.cacheDir, "medical-documents").deleteRecursively()
+        } }
         CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
         PatientPortal(appContainer, user) {
             CareReminders.cancel(context)

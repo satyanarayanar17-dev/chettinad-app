@@ -1,3 +1,5 @@
+> Initial work-package report, superseded by [ANDROID_IOS_PARITY.md](ANDROID_IOS_PARITY.md). The branch has since been published with user authorization and local builds/tests now pass.
+
 # Android patient access — 15 October 2026
 
 Branch: `feat/patient-otp-access`, based on Android main `8d22542`.

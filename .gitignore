@@ -19,3 +19,6 @@ debug.keystore
 my-upload-key.jks
 
 **/build/
+
+/native-apks/
+/native-qa/

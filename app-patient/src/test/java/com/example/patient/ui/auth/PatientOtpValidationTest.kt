@@ -5,7 +5,7 @@ import org.junit.Test
 
 class PatientOtpValidationTest {
     @Test fun `Indian formats normalize to one identity`() {
-        listOf("9876543210", "+91 98765 43210", "919876543210", "(98765)-43210").forEach {
+        listOf("9876543210", "09876543210", "+91 98765 43210", "919876543210", "(98765)-43210").forEach {
             assertEquals("+919876543210", normalizePhone(it))
         }
     }

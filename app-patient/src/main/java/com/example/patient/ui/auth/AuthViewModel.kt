@@ -147,6 +147,7 @@ internal fun normalizePhone(input: String): String? {
     val compact = input.trim().replace(Regex("""[\s()-]"""), "")
     val local = when {
         compact.startsWith("+91") -> compact.drop(3)
+        compact.length == 11 && compact.startsWith("0") -> compact.drop(1)
         compact.length == 12 && compact.startsWith("91") -> compact.drop(2)
         else -> compact
     }
