@@ -91,4 +91,4 @@ data class SelfRecord(val id: String, val record_type: String, val observed_at: 
 data class PatientDocument(val id: String, val title: String, val document_type: String, val original_filename: String, val mime_type: String, val clinical_date: String, val size_bytes: Long, val appointment_id: String? = null, val patient_note: String? = null)
 data class StaffMember(val id: String, val name: String, val role: String, val department: String? = null, val is_active: Any? = null) { val active: Boolean get() = is_active == true || is_active == 1 || is_active == 1.0 }
 data class AuditRow(val id: Any, val action: String? = null, val actor_id: String? = null, val user_id: String? = null, val created_at: String? = null, val timestamp: String? = null)
-data class DeviceSession(val id: String, val device_name: String, val created_at: String, val expires_at: String, val current: Boolean = false)
+data class DeviceSession(val id: String, val device_name: String? = null, val created_at: String? = null, val expires_at: String, val current: Boolean = false)

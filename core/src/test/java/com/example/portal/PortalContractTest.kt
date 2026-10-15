@@ -113,4 +113,23 @@ class PortalContractTest {
         assertEquals("SIGNED-MRN", content.patient_snapshot?.mrn)
         assertEquals(7, content.patient_snapshot?.__v)
     }
+    @Test fun `blank consultation fields and recovered legacy drafts send valid optional text`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"id":"note-1","__v":1}"""))
+        val draft = ConsultationData(history = "History kept", medications = listOf(Medication("drug-1", "One", "Daily", "3 days")))
+        api.saveNote("encounter-1", ConsultationWrite(0, draft.forWrite(), 7))
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue(body.contains("\"previous_history\":\"\"")); assertTrue(body.contains("\"treatment\":\"\""))
+        assertTrue(body.contains("\"instructions\":\"\"")); assertTrue(body.contains("\"history\":\"History kept\""))
+        assertFalse(body.contains("\"complaint\":null")); assertTrue(body.contains("\"follow_up\":null"))
+    }
+    @Test fun `legacy sessions with missing device metadata remain revocable`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""[{"id":"session-1","device_name":null,"created_at":null,"expires_at":"2026-10-16T00:00:00Z","current":false}]"""))
+        val session = api.sessions().single()
+        assertEquals("session-1", session.id); assertNull(session.device_name)
+        server.takeRequest()
+        server.enqueue(MockResponse().setBody("""{"success":true}"""))
+        api.revokeSession(session.id)
+        val request = server.takeRequest()
+        assertEquals("DELETE", request.method); assertEquals("/api/v1/auth/opd/sessions/session-1", request.path)
+    }
 }
