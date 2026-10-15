@@ -38,7 +38,7 @@ fun LoginScreen(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
