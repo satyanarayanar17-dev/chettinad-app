@@ -28,7 +28,9 @@ data class PortalState(
     val audit: List<AuditRow> = emptyList(), val sessions: List<DeviceSession> = emptyList(),
     val catalogues: PortalCatalogues = PortalCatalogues(), val labs: List<Lab> = emptyList(),
     val patients: List<PatientProfile> = emptyList(), val noteVersion: Int = 0,
-    val draft: ConsultationData = ConsultationData(), val draftAvailable: Boolean = false
+    val draft: ConsultationData = ConsultationData(), val draftAvailable: Boolean = false,
+    val draftDirty: Boolean = false, val draftConflict: Boolean = false,
+    val reviewedPatientVersion: Int? = null
 ) {
     fun availableSlots(doctorId: String, date: String): List<Slot> =
         if (slotsDoctorId == doctorId && slotsDate == date) slots else emptyList()
@@ -42,6 +44,8 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
     private var patientLoad: Job? = null
     private var slotsLoad: Job? = null
     private var patientSearch: Job? = null
+    private var refreshJob: Job? = null
+    private var patientRevision = 0
     init { refresh() }
 
     private suspend fun <T> read(section: String, request: suspend () -> T, apply: (PortalState, T) -> PortalState) {
@@ -53,13 +57,18 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
         catch (e: Exception) { _state.update { it.copy(errors = it.errors + (section to errorMessage(e))) } }
     }
 
-    fun refresh() {
-        if (_state.value.loading || _state.value.busy) return
-        viewModelScope.launch {
-            _state.update { it.copy(loading = true) }
-            supervisorScope {
+    fun refresh() = refresh(silent = false)
+    fun sync() = refresh(silent = true)
+    fun stopSync() { refreshJob?.cancel(); patientLoad?.cancel() }
+    private fun refresh(silent: Boolean) {
+        if (refreshJob?.isActive == true || patientLoad?.isActive == true || _state.value.busy || _state.value.patientLoading) return
+        val revision = patientRevision
+        refreshJob = viewModelScope.launch {
+            if (!silent) _state.update { it.copy(loading = true) }
+            try { supervisorScope {
                 launch { read("appointments", { allAppointments() }) { s, v -> s.copy(appointments = v) } }
-                launch { read("queue", { api.queue() }) { s, v -> s.copy(queue = v) } }
+                launch { read("queue", { api.queue() }) { s, v -> s.copy(queue = v,
+                    encounter = s.encounter?.let { old -> v.find { it.encounter_id == old.encounter_id } }) } }
                 launch { read("directory", { api.directory() }) { s, v -> s.copy(directory = v) } }
                 launch { read("notifications", { api.notifications() }) { s, v -> s.copy(notices = v) } }
                 launch { read("sessions", { api.sessions() }) { s, v -> s.copy(sessions = v) } }
@@ -71,9 +80,14 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
                     launch { read("labs", { allLabs() }) { s, v -> s.copy(labs = v) } }
                 }
             }
-            _state.update { it.copy(loading = false) }
-            val patient = if (user.role == Role.PATIENT) user.id else _state.value.patientId
-            if (patient != null) loadPatient(patient, _state.value.encounter)
+                if (revision == patientRevision) {
+                    val patient = if (user.role == Role.PATIENT) user.id else _state.value.patientId
+                    if (patient != null) {
+                        if (_state.value.patientId == null) loadPatient(patient)
+                        else refreshPatient(patient)
+                    }
+                }
+            } finally { _state.update { it.copy(loading = false) } }
         }
     }
 
@@ -89,32 +103,51 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
     }
 
     fun loadPatient(patientId: String, encounter: QueuePatient? = null) {
+        if (_state.value.busy) return
+        patientRevision++
         patientLoad?.cancel()
         _state.update { it.copy(patientLoading = true, patientId = patientId, encounter = encounter, record = null,
             care = CarePlanBundle(), today = emptyList(), timeline = emptyList(), documents = emptyList(),
             selfRecords = emptyList(), noteVersion = 0, draft = ConsultationData(), draftAvailable = false,
+            draftDirty = false, draftConflict = false, reviewedPatientVersion = null,
             errors = it.errors.filterKeys { key -> key !in setOf("record", "care plan", "today", "timeline", "measurements", "documents") }) }
-        patientLoad = viewModelScope.launch {
-            supervisorScope {
-                launch { read("record", { api.record(patientId) }) { s, v ->
-                    val note = v.notes.filter { it.encounter_id == encounter?.encounter_id }.maxByOrNull { it.__v }
-                    val draft = note?.draft_content?.let { content -> ConsultationData(
+        refreshPatient(patientId)
+    }
+
+    private fun mergeRecord(s: PortalState, v: ClinicalBundle): PortalState {
+        val note = v.notes.filter { it.encounter_id == s.encounter?.encounter_id }.maxByOrNull { it.__v }
+        if (s.draftDirty) return s.copy(record = v, draftConflict = s.draftConflict ||
+            s.noteVersion != (note?.__v ?: 0) || s.reviewedPatientVersion != v.patient.__v)
+        val draft = note?.draft_content?.let { content -> ConsultationData(
                         complaint = content.complaint, history = content.history, previous_history = content.previous_history,
                         examination = content.examination, assessment = content.assessment,
                         diagnosis_ids = content.diagnoses.map { it.id }, treatment = content.treatment,
                         advice = content.advice, medications = content.medications, follow_up = content.follow_up) } ?: ConsultationData()
-                    s.copy(record = v, noteVersion = note?.__v ?: 0, draft = draft,
-                        draftAvailable = encounter != null && tokens.getDraft(user.id, encounter.encounter_id) != null)
-                } }
+        return s.copy(record = v, noteVersion = note?.__v ?: 0, draft = draft,
+            reviewedPatientVersion = v.patient.__v, draftConflict = false,
+            draftAvailable = s.encounter?.let { tokens.getDraft(user.id, it.encounter_id) != null } ?: false)
+    }
+
+    private fun refreshPatient(patientId: String) {
+        patientLoad?.cancel()
+        patientLoad = viewModelScope.launch {
+            try { supervisorScope {
+                launch { read("record", { api.record(patientId) }, ::mergeRecord) }
                 launch { read("care plan", { api.carePlan(patientId) }) { s,v -> s.copy(care = v) } }
                 launch { read("today", { api.today(patientId) }) { s,v -> s.copy(today = v) } }
                 launch { read("timeline", { api.timeline(patientId) }) { s,v -> s.copy(timeline = v) } }
                 launch { read("measurements", { api.selfRecords(patientId) }) { s,v -> s.copy(selfRecords = v) } }
                 launch { read("documents", { api.documents(patientId) }) { s,v -> s.copy(documents = v) } }
                 if (user.role == Role.DOCTOR) launch { read("catalogues", { api.catalogues() }) { s,v -> s.copy(catalogues = v) } }
-            }
-            _state.update { it.copy(patientLoading = false) }
+            } } finally { _state.update { it.copy(patientLoading = false) } }
         }
+    }
+
+    fun reloadHospitalDraft() {
+        if (_state.value.busy) return
+        val state = _state.value
+        state.encounter?.let { tokens.removeDraft(user.id, it.encounter_id) }
+        state.patientId?.let { loadPatient(it, state.encounter) }
     }
 
     fun slots(doctor: String, date: String) {
@@ -129,7 +162,8 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
     fun clearMessage() { _state.update { it.copy(message = null, errors = it.errors - "action") } }
     fun action(success: String, operation: suspend () -> Unit) {
         if (_state.value.busy) return
-        _state.update { it.copy(busy = true, message = null, errors = it.errors - "action") }
+        refreshJob?.cancel(); patientLoad?.cancel()
+        _state.update { it.copy(busy = true, loading = false, patientLoading = false, message = null, errors = it.errors - "action") }
         viewModelScope.launch {
             try { operation(); _state.update { it.copy(message = success) } }
             catch (e: CancellationException) { throw e }
@@ -142,7 +176,7 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
     suspend fun reloadPatient() {
         val id = _state.value.patientId ?: return
         val record = api.record(id)
-        _state.update { it.copy(record = record) }
+        _state.update { mergeRecord(it, record) }
     }
     suspend fun reloadCare() {
         val id = _state.value.patientId ?: return
@@ -179,23 +213,24 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
     }
     fun updateDraft(data: ConsultationData) {
         val encounter = _state.value.encounter ?: return
-        _state.update { it.copy(draft = data) }
+        _state.update { it.copy(draft = data, draftDirty = true) }
         tokens.saveDraft(user.id, encounter.encounter_id, draftAdapter.toJson(data))
     }
     fun recoverDraft() {
         val encounter = _state.value.encounter ?: return
         val saved = tokens.getDraft(user.id, encounter.encounter_id) ?: return
-        runCatching { draftAdapter.fromJson(saved) }.getOrNull()?.let { data -> _state.update { it.copy(draft = data, draftAvailable = false) } }
+        runCatching { draftAdapter.fromJson(saved) }.getOrNull()?.let { data -> _state.update { it.copy(draft = data, draftAvailable = false, draftDirty = true) } }
     }
     fun saveNote(complete: Boolean) = action(if (complete) "Consultation signed and completed" else "Draft saved to hospital") {
         val state = _state.value; val encounter = requireNotNull(state.encounter)
+        check(!state.draftConflict) { "Review the changed hospital record before saving or signing" }
         val patient = requireNotNull(state.record?.patient)
         require(patient.id == encounter.patient_id) { "Review the current patient record before signing" }
-        val write = ConsultationWrite(state.noteVersion, state.draft.forWrite(), patient.__v)
+        val write = ConsultationWrite(state.noteVersion, state.draft.forWrite(), requireNotNull(state.reviewedPatientVersion))
         val result = if (complete) api.complete(encounter.encounter_id, write)
             else api.saveNote(encounter.encounter_id, write)
-        _state.update { it.copy(noteVersion = result.__v) }
-        if (complete) tokens.removeDraft(user.id, encounter.encounter_id)
+        _state.update { it.copy(noteVersion = result.__v, draftDirty = false, draftConflict = false, draftAvailable = false) }
+        tokens.removeDraft(user.id, encounter.encounter_id)
         reloadPatient(); reloadQueue()
     }
     fun transition(verb: String, triage: Map<String, Any>? = null, patientVersion: Int? = null,
@@ -226,6 +261,7 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
 }
 
 fun errorMessage(error: Throwable): String {
+    if (error is IllegalStateException && error.message == "Review the changed hospital record before saving or signing") return error.message!!
     if (error is IllegalArgumentException && error.message?.contains("10 MB") == true) return "The file is too large. Choose a document under 10 MB."
     if (error is HttpException) {
         val body = runCatching { error.response()?.errorBody()?.string() }.getOrNull().orEmpty()

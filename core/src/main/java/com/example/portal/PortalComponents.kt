@@ -13,6 +13,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
+
+/** A single foreground poller per signed-in portal; lifecycle cancellation stops background work. */
+@Composable internal fun ForegroundPortalSync(vm: PortalViewModel) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(vm, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            try {
+                while (true) { vm.sync(); delay(15_000) }
+            } finally { vm.stopSync() }
+        }
+    }
+}
 
 fun todayIndia(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = TimeZone.getTimeZone("Asia/Kolkata") }.format(Date())
 fun nowIso(): String = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date())

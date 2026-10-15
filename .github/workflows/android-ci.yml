@@ -20,8 +20,30 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
+      - uses: actions/checkout@v4
+        with:
+          repository: satyanarayanar17-dev/CHINAD123
+          ref: cd3256223d32527a249e6c4b02b434b04035bcb0
+          path: shared-api
+          sparse-checkout: |
+            backend
+            tests
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Start disposable shared API for native contract tests
+        run: |
+          npm ci --prefix shared-api/backend
+          node shared-api/tests/start-clinical.cjs > "$RUNNER_TEMP/shared-api.log" 2>&1 &
+          for attempt in {1..60}; do
+            if curl --silent --fail http://127.0.0.1:3005/api/v1/auth/opd/config > /dev/null; then break; fi
+            sleep 1
+          done
+          curl --silent --fail http://127.0.0.1:3005/api/v1/auth/opd/config > /dev/null
       - name: Test and build both apps
         run: gradle --continue :core:testDemoDebugUnitTest :app-patient:testDemoDebugUnitTest :app-staff:testDemoDebugUnitTest :app-patient:assembleDemoDebug :app-staff:assembleDemoDebug :app-patient:lintDemoDebug :app-staff:lintDemoDebug
+        env:
+          CC_SHARED_FIXTURE_BASE: http://127.0.0.1:3005/api/v1/
       - name: Upload test results and native UI captures
         if: always()
         uses: actions/upload-artifact@v4
@@ -87,3 +109,41 @@ jobs:
             core/build/reports/androidTests/
             core/build/outputs/androidTest-results/
             native-qa/
+  web-clinical:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: satyanarayanar17-dev/CHINAD123
+          ref: cd3256223d32527a249e6c4b02b434b04035bcb0
+          sparse-checkout: |
+            backend
+            tests
+            src
+            public
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install web and API dependencies
+        run: |
+          npm ci
+          npm ci --prefix backend
+          npx playwright install --with-deps chromium
+      - name: Build and verify web clinical journey against shared API
+        run: |
+          npm run build
+          cat > playwright.shared.config.ts <<'EOF'
+          import {defineConfig} from '@playwright/test';
+          import clinical from './playwright.clinical.config';
+          export default defineConfig({...clinical, use:{...clinical.use, channel:undefined}});
+          EOF
+          npx playwright test --config playwright.shared.config.ts
+        env:
+          CLINICAL_RESULTS_FILE: test-results/clinical-results.json
+          CLINICAL_EVIDENCE_DIR: test-results/clinical-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Shared-Web-Clinical-Evidence
+          path: test-results/
