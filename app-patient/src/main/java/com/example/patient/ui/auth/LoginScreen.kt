@@ -24,6 +24,8 @@ fun LoginScreen(
     // Keep OTP and demographics in memory only, never in saved instance state.
     var phone by remember { mutableStateOf("") }
     var code by remember(uiState.challengeId, uiState.otpRequested) { mutableStateOf("") }
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(uiState.expiresAt) { while (uiState.otpRequested) { now = System.currentTimeMillis(); kotlinx.coroutines.delay(1000) } }
     val profile = remember(uiState.phone) { mutableStateMapOf<String, String>() }
     LaunchedEffect(uiState.user) { uiState.user?.let { onLoginSuccess(it.role) } }
 
@@ -34,7 +36,7 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            AppLogo(modifier = Modifier.size(72.dp))
+            AppLogo(modifier = Modifier.width(220.dp).height(76.dp))
             Text("Chettinad Care Patient Access", style = MaterialTheme.typography.headlineMedium)
             Text("Sign in securely with a code sent to your mobile.")
             if (!uiState.otpRequested) {
@@ -48,6 +50,8 @@ fun LoginScreen(
                     modifier = Modifier.fillMaxWidth()) { Text("Send code") }
             } else {
                 Text("Code sent to ${uiState.phone}")
+                uiState.demoCode?.let { Text("Development test code: $it · synthetic testing only", color = MaterialTheme.colorScheme.error) }
+                Text(if (now < uiState.expiresAt) "Code expires in ${((uiState.expiresAt-now)/1000).coerceAtLeast(0)} seconds" else "Code expired. Request a new code.")
                 OutlinedTextField(
                     value = code, onValueChange = { code = it.filter { c -> c in '0'..'9' }.take(6) },
                     label = { Text("Six-digit SMS code") },
@@ -86,12 +90,12 @@ fun LoginScreen(
                 val required = listOf("name", "dob", "address", "city", "state", "pin_code", "emergency_contact", "gender")
                 Button(
                     onClick = { onVerifyOtp(code, if (uiState.profileRequired) profile.toMap() else null) },
-                    enabled = !uiState.isLoading && code.length == 6 &&
+                    enabled = !uiState.isLoading && now < uiState.expiresAt && code.length == 6 &&
                         (!uiState.profileRequired || required.all { !profile[it].isNullOrBlank() }),
                     modifier = Modifier.fillMaxWidth()
                 ) { Text(if (uiState.profileRequired) "Register and sign in" else "Verify and sign in") }
-                TextButton(onClick = { code = ""; onRequestOtp(uiState.phone) }, enabled = !uiState.isLoading) {
-                    Text("Request a new code")
+                TextButton(onClick = { code = ""; onRequestOtp(uiState.phone) }, enabled = !uiState.isLoading && now >= uiState.resendAt) {
+                    Text(if (now >= uiState.resendAt) "Request a new code" else "Resend in ${((uiState.resendAt-now)/1000).coerceAtLeast(0)} seconds")
                 }
                 TextButton(onClick = { code = ""; profile.clear(); onChangePhone() }, enabled = !uiState.isLoading) {
                     Text("Change mobile number")

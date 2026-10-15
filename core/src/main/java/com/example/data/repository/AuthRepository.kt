@@ -19,8 +19,7 @@ open class AuthRepository(
     private val tokenManager: TokenManager,
     private val cookieJar: PersistentCookieJar
 ) {
-    private val _currentUser = MutableStateFlow<User?>(tokenManager.getUser())
-    val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
+    val currentUser: StateFlow<User?> = tokenManager.user
 
     open suspend fun login(credentials: Map<String, String>): Result<User> {
         return try {
@@ -28,6 +27,7 @@ open class AuthRepository(
             tokenManager.saveToken(response.access_token)
             
             val role = Role.valueOf(response.role.uppercase())
+            require(role != Role.PATIENT) { "Staff role required" }
             val user = User(
                 id = response.userId,
                 name = response.name ?: response.userId,
@@ -35,11 +35,14 @@ open class AuthRepository(
                 department = null, // Will fetch from /opd/session if needed
                 isActive = true
             )
-            tokenManager.saveUser(user)
-            _currentUser.value = user
-            Result.success(user)
+            val session = apiService.getSession()
+            require(session.role.equals(role.name, ignoreCase = true))
+            tokenManager.saveUser(user.copy(name = session.name, department = session.department, mustChangePassword = session.must_change_password == true || session.must_change_password == 1 || session.must_change_password == 1.0))
+            Result.success(tokenManager.getUser() ?: user)
+        } catch (e: CancellationException) {
+            clearLocalSession(); throw e
         } catch (e: Exception) {
-            Result.failure(e)
+            clearLocalSession(); Result.failure(e)
         }
     }
     
@@ -69,7 +72,6 @@ open class AuthRepository(
         val patientId = requireNotNull(session.patient_id?.takeIf { it.isNotBlank() })
         val user = User(id = patientId, name = session.name, role = Role.PATIENT, isActive = true)
         tokenManager.saveUser(user)
-        _currentUser.value = user
         Result.success(user)
     } catch (e: CancellationException) {
         clearLocalSession()
@@ -103,7 +105,6 @@ open class AuthRepository(
     private fun clearLocalSession() {
         tokenManager.clear()
         cookieJar.clear()
-        _currentUser.value = null
     }
 
     open fun getStoredUser(): User? {
