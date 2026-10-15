@@ -4,6 +4,8 @@ import com.example.data.api.*
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.runBlocking
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
@@ -56,6 +58,12 @@ class PortalContractTest {
         val request = server.takeRequest()
         assertEquals("/api/v1/opd/encounters/enc-1/triage", request.path)
         assertTrue(request.body.readUtf8().contains("\"__v\":4"))
+    }
+    @Test fun `clinical safety messages keep the medicine name visible`() {
+        val body = """{"error":{"code":"ALLERGY_WARNING","message":"Allergy warning: review Synthetic medicine."}}"""
+        val error = retrofit2.HttpException(retrofit2.Response.error<Any>(409,
+            body.toResponseBody("application/json".toMediaType())))
+        assertTrue(errorMessage(error).contains("Synthetic medicine"))
     }
     @Test fun `date validation rejects impossible calendar dates`() {
         assertTrue(validDate("2024-02-29")); assertFalse(validDate("2026-02-29")); assertFalse(validDate("2026-2-01"))

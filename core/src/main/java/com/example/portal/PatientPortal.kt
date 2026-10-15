@@ -31,10 +31,10 @@ import androidx.compose.ui.platform.LocalContext
     Scaffold(
         topBar = { TopAppBar(title = { Text("Chettinad Care", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) },
             actions = { TextButton(onClick = vm::refresh, enabled = !state.loading && !state.busy) { Text("Refresh") } }) },
-        bottomBar = { NavigationBar { primary.forEach { (name, icon) ->
+        bottomBar = { NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) { primary.forEach { (name, icon) ->
             NavigationBarItem(selected = if (name == "More") tab in listOf("Queue", "Trends", "Profile", "Notifications") else tab == name,
                 onClick = { if (!state.busy) { if (name == "More") more = true else tab = name } },
-                icon = { Icon(icon, contentDescription = name) }, label = { Text(name) })
+                icon = { Icon(icon, contentDescription = name) }, label = { Text(if (name == "Appointments") "Visits" else name, maxLines = 1) })
         } } }
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {

@@ -2,6 +2,9 @@ package com.example.portal
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.performClick
 import com.example.ui.theme.AppTheme
 import com.example.data.api.*
 import com.example.di.AppContainer
@@ -35,7 +38,26 @@ class PortalVisualTest {
         every { container.tokenManager } returns TokenManager()
         compose.setContent { AppTheme(darkTheme = false) { PatientPortal(container, User("patient-1", "Anitha", Role.PATIENT)) {} } }
         compose.waitForIdle()
+        compose.onNodeWithText("Hello, Anitha").assertIsDisplayed()
         java.io.File("build/qa").mkdirs()
         compose.onRoot().captureRoboImage("build/qa/patient-home.png")
+    }
+
+    @Test fun staffQueueVisual() {
+        System.setProperty("roborazzi.test.record", "true")
+        val api = mockk<PortalApi>(relaxed = true)
+        coEvery { api.appointments(any(), any()) } returns emptyList()
+        coEvery { api.directory() } returns Directory()
+        coEvery { api.labs(any(), any()) } returns emptyList()
+        coEvery { api.queue() } returns listOf(
+            QueuePatient("enc-1", "pat-1", "Anitha", "MRN-001", "WAITING_DOCTOR", 3, "OBST-001", wait_minutes = 8.0),
+            QueuePatient("enc-2", "pat-2", "Meena", "MRN-002", "CONSULTATION", 4, "OBST-002", wait_minutes = 2.0))
+        val container = mockk<AppContainer>()
+        every { container.portalApi } returns api
+        every { container.tokenManager } returns TokenManager()
+        compose.setContent { AppTheme(darkTheme = false) { StaffPortal(container, User("doctor-1", "Dr. Priya", Role.DOCTOR, "Obstetrics & Gynaecology")) {} } }
+        compose.waitForIdle()
+        compose.onNodeWithText("Live queue").assertIsDisplayed()
+        compose.onRoot().captureRoboImage("build/qa/staff-queue.png")
     }
 }

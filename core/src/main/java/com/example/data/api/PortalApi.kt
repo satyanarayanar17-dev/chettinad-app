@@ -59,7 +59,7 @@ data class PatientProfile(
 )
 data class Department(val id: String, val name: String, val prefix: String = "")
 data class Doctor(val id: String, val name: String, val department: String? = null, val schedules: List<DoctorSchedule> = emptyList())
-data class DoctorSchedule(val id: String, val doctor_id: String, val department_id: String, val weekday: Int, val start_time: String, val end_time: String, val slot_minutes: Int, val room: String, val __v: Int = 1)
+data class DoctorSchedule(val id: String, val doctor_id: String, val department_id: String, val weekday: Int, val start_time: String, val end_time: String, val slot_minutes: Int, val room: String, val __v: Int = 1, val break_start: String? = null, val break_end: String? = null)
 data class Directory(val departments: List<Department> = emptyList(), val doctors: List<Doctor> = emptyList())
 data class Slot(val scheduled_at: String, val ends_at: String, val room: String = "", val department_id: String = "")
 data class Appointment(val id: String, val scheduled_at: String, val status: String, val __v: Int, val patient_id: String? = null, val patient_name: String? = null, val mrn: String? = null, val doctor_id: String? = null, val doctor_name: String? = null, val department_name: String? = null, val reason: String? = null, val encounter_id: String? = null)

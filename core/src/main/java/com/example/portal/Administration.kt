@@ -43,22 +43,32 @@ import com.example.data.api.*
     var doctor by remember { mutableStateOf("") }; var weekday by remember { mutableStateOf("1") }
     var start by remember { mutableStateOf("09:00") }; var end by remember { mutableStateOf("13:00") }
     var minutes by remember { mutableStateOf("15") }; var room by remember { mutableStateOf("") }
+    var breakStart by remember { mutableStateOf("") }; var breakEnd by remember { mutableStateOf("") }
     PageHeading("Doctor schedules", "Weekly sessions used to offer appointment slots.")
     ErrorCards(state, setOf("directory"), vm::refresh)
     state.directory.doctors.forEach { d -> FilterChip(selected = doctor == d.id, onClick = { doctor = d.id }, label = { Text(d.name) }) }
     val selectedDoctor = state.directory.doctors.find { it.id == doctor }
+    LaunchedEffect(doctor, weekday, state.directory) {
+        val old = selectedDoctor?.schedules?.find { it.weekday == weekday.toInt() }
+        start = old?.start_time ?: "09:00"; end = old?.end_time ?: "13:00"
+        room = old?.room.orEmpty(); minutes = (old?.slot_minutes ?: 15).toString()
+        breakStart = old?.break_start.orEmpty(); breakEnd = old?.break_end.orEmpty()
+    }
     selectedDoctor?.schedules?.forEach { schedule -> InfoCard("${listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday").getOrElse(schedule.weekday) { "Day" }} · ${schedule.start_time}–${schedule.end_time}", "${schedule.room} · ${schedule.slot_minutes} minute slots") }
     InfoCard("Configure weekly session", "Changes apply to newly offered slots. Existing appointments keep their time.") {
         ChoiceRow((0..6).map { it.toString() }, weekday, { weekday = it }, !state.busy)
         Text("0 Sunday · 1 Monday · 2 Tuesday · 3 Wednesday · 4 Thursday · 5 Friday · 6 Saturday", style = MaterialTheme.typography.bodySmall)
         Field("Start (HH:MM)", start, { start = it }, !state.busy); Field("End (HH:MM)", end, { end = it }, !state.busy)
+        Field("Break start (HH:MM, optional)", breakStart, { breakStart = it }, !state.busy)
+        Field("Break end (HH:MM, optional)", breakEnd, { breakEnd = it }, !state.busy)
         Field("Slot duration (minutes)", minutes, { minutes = it }, !state.busy); Field("Room", room, { room = it }, !state.busy)
         Button(onClick = { vm.action("Schedule updated") {
             val doc = requireNotNull(selectedDoctor); val department = state.directory.departments.first { it.name == doc.department }
             val old = doc.schedules.find { it.weekday == weekday.toInt() }
             val data = mutableMapOf<String, Any>("doctor_id" to doc.id, "department_id" to department.id, "weekday" to weekday.toInt(), "start_time" to start, "end_time" to end, "slot_minutes" to minutes.toInt(), "room" to room)
+            if (breakStart.isNotBlank()) { data["break_start"] = breakStart; data["break_end"] = breakEnd }
             old?.let { data["__v"] = it.__v }; vm.api.schedule(data); vm.reloadDirectory(vm.api.directory())
-        } }, enabled = !state.busy && selectedDoctor != null && room.isNotBlank() && minutes.toIntOrNull() in 5..120 && listOf(start, end).all { it.matches(Regex("([01][0-9]|2[0-3]):[0-5][0-9]")) } && start < end) { Text("Save schedule") }
+        } }, enabled = !state.busy && selectedDoctor != null && room.isNotBlank() && minutes.toIntOrNull() in 5..120 && listOf(start, end).all { it.matches(Regex("([01][0-9]|2[0-3]):[0-5][0-9]")) } && start < end && ((breakStart.isBlank() && breakEnd.isBlank()) || (breakStart.matches(Regex("([01][0-9]|2[0-3]):[0-5][0-9]")) && breakEnd.matches(Regex("([01][0-9]|2[0-3]):[0-5][0-9]")) && breakStart >= start && breakStart < breakEnd && breakEnd <= end))) { Text("Save schedule") }
     }
 }
 

@@ -213,6 +213,10 @@ fun errorMessage(error: Throwable): String {
     if (error is HttpException) {
         val body = runCatching { error.response()?.errorBody()?.string() }.getOrNull().orEmpty()
         val code = Regex("\\\"code\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"").find(body)?.groupValues?.get(1)
+        if (code in setOf("ALLERGY_WARNING", "DUPLICATE_MEDICATION")) {
+            val envelope = runCatching { Moshi.Builder().add(KotlinJsonAdapterFactory()).build().adapter(ClinicalErrorEnvelope::class.java).fromJson(body) }.getOrNull()
+            envelope?.error?.message?.let { return it }
+        }
         return when (error.code()) {
             401 -> "Your session has expired. Please sign in again."
             403 -> "Your account does not have access to this action."
@@ -224,3 +228,6 @@ fun errorMessage(error: Throwable): String {
     }
     return "Unable to connect. Check your connection and try again."
 }
+
+internal data class ClinicalErrorEnvelope(val error: ClinicalErrorMessage)
+internal data class ClinicalErrorMessage(val message: String)

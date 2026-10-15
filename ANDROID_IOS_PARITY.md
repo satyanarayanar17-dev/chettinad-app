@@ -4,7 +4,7 @@ Work started 15 October 2026. This file supersedes the earlier Android gap matri
 
 ## Source of truth
 
-- iOS reference: `satyanarayanar17-dev/Chettinsd-care-IOS`, master, inspected locally.
+- iOS reference: `satyanarayanar17-dev/Chettinsd-care-IOS`, master at `649d9f5fa2fe1eaac354e7670871bb677d3bb240`, inspected locally.
 - Shared backend: `satyanarayanar17-dev/CHINAD123`, deployment revision `cd3256223d32527a249e6c4b02b434b04035bcb0`.
 - Android: existing `app-patient`, `app-staff` and `core` modules, Kotlin and Jetpack Compose.
 
@@ -54,7 +54,20 @@ gradle :app-patient:assembleDemoDebug :app-staff:assembleDemoDebug
 
 ## Verification status
 
-All three modules compiled locally. Expanded contract, concurrency, encrypted-session, cookie-boundary and native UI tests are being run; final counts and APK checksums will be written after the final verification run. Handset acceptance and Google Play release signing are separate from a debug APK build.
+Local final verification passed:
+
+| Suite | Passed | Failed | Skipped |
+| --- | ---: | ---: | ---: |
+| Core contracts, state and native UI | 19 | 0 | 0 |
+| Patient | 7 | 0 | 0 |
+| Staff | 6 | 0 | 0 |
+| Total | 32 | 0 | 0 |
+
+Both APKs and the instrumentation test APK build successfully. Both application signatures verify with `apksigner`; package IDs are distinct, minSdk 24 and targetSdk 36. Rendered Patient Home and Staff Queue screens were inspected and the bottom-navigation labels corrected for compact widths.
+
+The backend's patient portal/document, care-plan and authentication/session suites pass against isolated synthetic SQLite databases. The additional OTP suite passes 16 tests, including the production route with simulated external SMS transport. None of these tests sent real SMS or changed the deployed database.
+
+Android Keystore persistence is tested on a real Android emulator in CI rather than mocked on the JVM. Installation/launcher and side-by-side coexistence checks are configured in the same CI workflow. Their current run status is recorded on PR #1; physical-handset acceptance and Google Play release signing remain separate from debug APK builds.
 
 The iOS-configured server health check reported a development SQLite fixture, not a production PostgreSQL deployment. The Android code does not change that deployment. Real-patient acceptance still needs production configuration/SMS delivery plus physical-device workflow checks.
 
