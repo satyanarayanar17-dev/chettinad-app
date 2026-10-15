@@ -85,4 +85,32 @@ class PortalContractTest {
     @Test fun `date validation rejects impossible calendar dates`() {
         assertTrue(validDate("2024-02-29")); assertFalse(validDate("2026-02-29")); assertFalse(validDate("2026-2-01"))
     }
+    @Test fun `consultation signing carries both independent concurrency versions`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"id":"note-1","__v":3}"""))
+        api.complete("encounter-1", ConsultationWrite(2, ConsultationData(), patient__v = 7))
+        val request = server.takeRequest()
+        assertEquals("/api/v1/opd/encounters/encounter-1/complete", request.path)
+        val body = request.body.readUtf8()
+        assertTrue(body.contains("\"patient__v\":7")); assertTrue(body.contains("\"__v\":2"))
+    }
+    @Test fun `profile edits carry the patient version and only chosen demographic fields`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"success":true}"""))
+        api.updateProfile("patient-1", mapOf("__v" to 7, "data" to mapOf("email" to "synthetic@example.com", "city" to "Chennai")))
+        val request = server.takeRequest()
+        assertEquals("PATCH", request.method)
+        assertEquals("/api/v1/opd/patients/patient-1", request.path)
+        assertEquals("""{"__v":7,"data":{"email":"synthetic@example.com","city":"Chennai"}}""", request.body.readUtf8())
+    }
+    @Test fun `password validation matches the hospital character and length policy`() {
+        assertTrue(validStaffPassword("Synthetic2026!"))
+        assertFalse(validStaffPassword("Short1!")); assertFalse(validStaffPassword("synthetic2026!"))
+        assertFalse(validStaffPassword("SyntheticOnly!")); assertFalse(validStaffPassword("Synthetic2026"))
+        assertFalse(validStaffPassword("A".repeat(73) + "a1!"))
+    }
+    @Test fun `signed prescriptions retain the historical patient identity`() {
+        val content = moshi.adapter(PrescriptionContent::class.java).fromJson("""{"patient_snapshot":{"id":"patient-1","mrn":"SIGNED-MRN","name":"Name when signed","dob":"1990-01-01","gender":"Female","__v":7}}""")!!
+        assertEquals("Name when signed", content.patient_snapshot?.name)
+        assertEquals("SIGNED-MRN", content.patient_snapshot?.mrn)
+        assertEquals(7, content.patient_snapshot?.__v)
+    }
 }

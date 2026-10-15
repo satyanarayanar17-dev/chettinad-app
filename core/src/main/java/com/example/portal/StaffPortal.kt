@@ -72,7 +72,7 @@ import com.example.di.AppContainer
     }
 }
 
-@Composable private fun TriagePage(vm: PortalViewModel, state: PortalState) {
+@Composable internal fun TriagePage(vm: PortalViewModel, state: PortalState) {
     val encounter = state.encounter
     ErrorCards(state, setOf("record", "queue"), vm::refresh)
     state.record?.patient?.allergies?.takeIf { it.isNotBlank() }?.let { InfoCard("Recorded allergies", it) }
@@ -81,17 +81,29 @@ import com.example.di.AppContainer
     if (encounter.status == "WAITING") Button(onClick = { vm.transition("start-triage") }, enabled = !state.busy) { Text("Start triage") }
     if (encounter.status == "WAITING_DOCTOR") { EmptyCard("Triage complete", "The patient is waiting for the assigned doctor."); return }
     if (encounter.status != "TRIAGE") return
+    val patient = state.record?.patient ?: run { Text("Loading the patient record before triage…"); return }
     val values = remember(encounter.encounter_id) { mutableStateMapOf<String, String>() }
-    var complaint by remember(encounter.encounter_id) { mutableStateOf("") }; var allergies by remember(encounter.encounter_id) { mutableStateOf("") }
+    var complaint by remember(encounter.encounter_id) { mutableStateOf("") }
+    var allergies by remember(encounter.encounter_id, patient.__v) { mutableStateOf(patient.allergies.orEmpty()) }
+    val originalStatus = patient.allergy_review_status ?: if (patient.allergies.isNullOrBlank()) "UNKNOWN" else "RECORDED"
+    var allergyStatus by remember(encounter.encounter_id, patient.__v) { mutableStateOf(originalStatus) }
+    var allergyConfirmed by remember(encounter.encounter_id, patient.__v) { mutableStateOf(false) }
+    var allergyReason by remember(encounter.encounter_id, patient.__v) { mutableStateOf("") }
     var notes by remember(encounter.encounter_id) { mutableStateOf("") }; var priority by remember(encounter.encounter_id) { mutableStateOf("ROUTINE") }
     InfoCard("Vital signs", "Enter measured values. The hospital applies its clinical validation and escalation rules.") {
         listOf("temperature" to "Temperature (°C)", "systolic" to "Systolic BP (mmHg)", "diastolic" to "Diastolic BP (mmHg)", "pulse" to "Pulse (bpm)", "spo2" to "Oxygen saturation (%)", "weight" to "Weight (kg)", "height" to "Height (cm)", "pain" to "Pain score (0–10)", "glucose" to "Glucose (mg/dL, optional)").forEach { (key, title) -> Field(title, values[key].orEmpty(), { values[key] = it }, !state.busy) }
         Field("Presenting complaint", complaint, { complaint = it }, !state.busy, 2)
-        Field("Allergies", allergies, { allergies = it }, !state.busy)
+        Field("Allergies", allergies, { allergies = it; allergyConfirmed = false }, !state.busy)
+        ChoiceRow(listOf("UNKNOWN", "NONE_REPORTED", "RECORDED"), allergyStatus, { allergyStatus = it; allergyConfirmed = false }, !state.busy)
+        Row { Checkbox(allergyConfirmed, { allergyConfirmed = it }, enabled = !state.busy); Text("I reviewed the allergy record with the patient") }
+        val allergyChanged = allergies != patient.allergies.orEmpty() || allergyStatus != originalStatus
+        if (allergyChanged) Field("Reason for allergy update", allergyReason, { allergyReason = it }, !state.busy)
         Field("Triage notes", notes, { notes = it }, !state.busy, 2)
         ChoiceRow(listOf("ROUTINE", "URGENT", "EMERGENCY"), priority, { priority = it }, !state.busy)
         val ranges = mapOf("temperature" to 25.0..45.0, "systolic" to 40.0..300.0, "diastolic" to 20.0..200.0, "pulse" to 20.0..250.0, "spo2" to 1.0..100.0, "weight" to 0.5..500.0, "height" to 20.0..250.0, "pain" to 0.0..10.0)
-        val valid = ranges.all { (key, range) -> values[key]?.toDoubleOrNull()?.let { it.isFinite() && it in range } == true } &&
+        val valid = allergyConfirmed && (!allergyChanged || allergyReason.isNotBlank()) &&
+            (allergyStatus != "NONE_REPORTED" || allergies.isBlank()) && (allergyStatus != "RECORDED" || allergies.isNotBlank()) &&
+            ranges.all { (key, range) -> values[key]?.toDoubleOrNull()?.let { it.isFinite() && it in range } == true } &&
             listOf("systolic", "diastolic", "pulse", "pain").all { values[it]?.toIntOrNull() != null } &&
             (values["systolic"]?.toIntOrNull() ?: 0) > (values["diastolic"]?.toIntOrNull() ?: 0) && complaint.isNotBlank() &&
             (values["glucose"].isNullOrBlank() || values["glucose"]?.toDoubleOrNull()?.let { it > 0 && it <= 1500 } == true)
@@ -100,8 +112,9 @@ import com.example.di.AppContainer
             ranges.keys.forEach { key -> payload[key] = if (key in listOf("systolic", "diastolic", "pulse", "pain")) values[key]!!.toInt() else values[key]!!.toDouble() }
             values["glucose"]?.toDoubleOrNull()?.let { payload["glucose"] = it }
             payload["complaint"] = complaint; payload["allergies"] = allergies; payload["notes"] = notes
+            payload["allergy_review_status"] = allergyStatus
             payload["priority"] = listOf("ROUTINE", "URGENT", "EMERGENCY").indexOf(priority)
-            vm.transition("triage", payload)
+            vm.transition("triage", payload, patient.__v, true, allergyReason)
         }, enabled = valid && !state.busy) { Text("Save triage and send to doctor") }
     }
 }
@@ -171,14 +184,14 @@ import com.example.di.AppContainer
     }
 }
 
-@Composable private fun FollowUpEditor(vm: PortalViewModel, state: PortalState) {
+@Composable internal fun FollowUpEditor(vm: PortalViewModel, state: PortalState) {
     var show by remember { mutableStateOf(false) }; var date by remember { mutableStateOf(todayIndia()) }; var reason by remember { mutableStateOf("") }
     InfoCard("Follow-up", state.draft.follow_up?.get("scheduled_at")?.let(::displayDate)) {
         TextButton(onClick = { show = !show }) { Text("Schedule follow-up with this doctor") }
         if (show) {
             Field("Date (YYYY-MM-DD)", date, { date = it }, !state.busy); Field("Reason", reason, { reason = it }, !state.busy)
             OutlinedButton(onClick = { vm.slots(vm.user.id, date) }, enabled = validDate(date) && !state.busy) { Text("Find times") }
-            state.slots.forEach { slot -> TextButton(onClick = { vm.updateDraft(state.draft.copy(follow_up = mapOf("doctor_id" to vm.user.id, "scheduled_at" to slot.scheduled_at, "reason" to reason))); show = false }, enabled = reason.isNotBlank() && !state.busy) { Text(displayDate(slot.scheduled_at)) } }
+            state.availableSlots(vm.user.id, date).forEach { slot -> TextButton(onClick = { vm.updateDraft(state.draft.copy(follow_up = mapOf("doctor_id" to vm.user.id, "scheduled_at" to slot.scheduled_at, "reason" to reason))); show = false }, enabled = reason.isNotBlank() && !state.busy) { Text(displayDate(slot.scheduled_at)) } }
         }
         if (state.draft.follow_up != null) TextButton(onClick = { vm.updateDraft(state.draft.copy(follow_up = null)) }, enabled = !state.busy) { Text("Remove follow-up booking") }
     }

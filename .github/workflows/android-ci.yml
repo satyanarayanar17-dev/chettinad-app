@@ -21,7 +21,7 @@ jobs:
         with:
           gradle-version: '9.3.1'
       - name: Test and build both apps
-        run: gradle --continue :core:testDemoDebugUnitTest :app-patient:testDemoDebugUnitTest :app-staff:testDemoDebugUnitTest :app-patient:assembleDemoDebug :app-staff:assembleDemoDebug
+        run: gradle --continue :core:testDemoDebugUnitTest :app-patient:testDemoDebugUnitTest :app-staff:testDemoDebugUnitTest :app-patient:assembleDemoDebug :app-staff:assembleDemoDebug :app-patient:lintDemoDebug :app-staff:lintDemoDebug
       - name: Upload test results and native UI captures
         if: always()
         uses: actions/upload-artifact@v4
@@ -30,6 +30,7 @@ jobs:
           path: |
             **/build/reports/tests/
             **/build/test-results/
+            **/build/reports/lint-results-*
             core/build/qa/
       - name: Upload Patient APK
         uses: actions/upload-artifact@v4

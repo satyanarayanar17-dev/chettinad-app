@@ -171,7 +171,8 @@ data class Medication(
 
 data class ConsultationWrite(
     val __v: Int,
-    val data: ConsultationData
+    val data: ConsultationData,
+    val patient__v: Int? = null
 )
 
 data class NoteVersion(

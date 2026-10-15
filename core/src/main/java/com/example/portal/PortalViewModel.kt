@@ -41,6 +41,7 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
     private val draftAdapter = moshi.adapter(ConsultationData::class.java)
     private var patientLoad: Job? = null
     private var slotsLoad: Job? = null
+    private var patientSearch: Job? = null
     init { refresh() }
 
     private suspend fun <T> read(section: String, request: suspend () -> T, apply: (PortalState, T) -> PortalState) {
@@ -171,7 +172,11 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
         api.addSelfRecord(id, body); val records = api.selfRecords(id)
         _state.update { it.copy(selfRecords = records) }
     }
-    fun searchPatients(query: String) { viewModelScope.launch { read("patients", { api.patients(query) }) { s,v -> s.copy(patients = v) } } }
+    fun searchPatients(query: String) {
+        patientSearch?.cancel()
+        _state.update { it.copy(patients = emptyList()) }
+        patientSearch = viewModelScope.launch { read("patients", { api.patients(query) }) { s,v -> s.copy(patients = v) } }
+    }
     fun updateDraft(data: ConsultationData) {
         val encounter = _state.value.encounter ?: return
         _state.update { it.copy(draft = data) }
@@ -184,17 +189,25 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
     }
     fun saveNote(complete: Boolean) = action(if (complete) "Consultation signed and completed" else "Draft saved to hospital") {
         val state = _state.value; val encounter = requireNotNull(state.encounter)
-        val result = if (complete) api.complete(encounter.encounter_id, ConsultationWrite(state.noteVersion, state.draft))
-            else api.saveNote(encounter.encounter_id, ConsultationWrite(state.noteVersion, state.draft))
+        val patient = requireNotNull(state.record?.patient)
+        require(patient.id == encounter.patient_id) { "Review the current patient record before signing" }
+        val write = ConsultationWrite(state.noteVersion, state.draft, patient.__v)
+        val result = if (complete) api.complete(encounter.encounter_id, write)
+            else api.saveNote(encounter.encounter_id, write)
         _state.update { it.copy(noteVersion = result.__v) }
         if (complete) tokens.removeDraft(user.id, encounter.encounter_id)
         reloadPatient(); reloadQueue()
     }
-    fun transition(verb: String, triage: Map<String, Any>? = null) = action("Visit updated") {
+    fun transition(verb: String, triage: Map<String, Any>? = null, patientVersion: Int? = null,
+                   allergyReviewConfirmed: Boolean = false, allergyChangeReason: String? = null) = action("Visit updated") {
         val encounter = requireNotNull(_state.value.encounter)
         val body = mutableMapOf<String, Any>("__v" to encounter.__v)
         triage?.let { body["data"] = it }
+        patientVersion?.let { body["patient__v"] = it }
+        if (allergyReviewConfirmed) body["allergy_review_confirmed"] = true
+        allergyChangeReason?.takeIf { it.isNotBlank() }?.let { body["allergy_change_reason"] = it }
         api.encounterAction(encounter.encounter_id, verb, body); reloadQueue()
+        if (triage != null) reloadPatient()
     }
     fun orderLab(test: String) = action("Laboratory test ordered") {
         val encounter = requireNotNull(_state.value.encounter)
@@ -221,6 +234,8 @@ fun errorMessage(error: Throwable): String {
             val envelope = runCatching { Moshi.Builder().add(KotlinJsonAdapterFactory()).build().adapter(ClinicalErrorEnvelope::class.java).fromJson(body) }.getOrNull()
             envelope?.error?.message?.let { return it }
         }
+        if (code == "INVALID_CREDENTIALS" && error.response()?.raw()?.request?.url?.encodedPath?.endsWith("auth/change-password") == true)
+            return "The current password is incorrect. Check it and try again."
         return when (error.code()) {
             401 -> "Your session has expired. Please sign in again."
             403 -> "Your account does not have access to this action."
