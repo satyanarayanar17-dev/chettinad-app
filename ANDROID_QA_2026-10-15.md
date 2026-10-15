@@ -14,6 +14,9 @@ The source audit covers the active native Patient and Staff portals against iOS 
 | Wrong current password could trigger authentication refresh/replay and sign the user out | Do not replay password-change credential failures; retain the session for correction. Match the backend's 12–72 character password policy. |
 | Trend charts could connect different units and omitted diastolic history | Group by measurement component and unit; show both blood-pressure series. Tests cover mixed glucose units, both BP components and irrelevant/non-finite values. |
 | Prescription printing could substitute current patient demographics for the signed identity | Retain and print the backend's signed patient snapshot, with a fallback for older prescriptions without snapshots. |
+| Backup XML retained default allow-all transfer rules despite the disabled-backup manifest flag | Replace templates with explicit exclusions for all nine storage domains in legacy/cloud/device-transfer policies; both apps use the shared policy. XML structure/domain checks pass. |
+
+Android documents manufacturer-dependent device-transfer behavior for the manifest flag: https://developer.android.com/identity/data/autobackup
 
 ## Evidence
 
