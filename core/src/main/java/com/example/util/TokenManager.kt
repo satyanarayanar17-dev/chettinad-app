@@ -21,7 +21,7 @@ class TokenManager(context: Context? = null) {
     private val adapter = Moshi.Builder().add(KotlinJsonAdapterFactory()).build().adapter(User::class.java)
     @Volatile private var accessToken: String? = preferences?.getString("token", null)
     private val _user = MutableStateFlow(runCatching { preferences?.getString("user", null)?.let(adapter::fromJson) }.getOrNull())
-    val user: StateFlow<User?> = _user.asStateFlow()
+    val sessionUser: StateFlow<User?> = _user.asStateFlow()
     private val _isLoggedIn = MutableStateFlow(_user.value != null)
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
     @Synchronized fun saveToken(token: String) { accessToken = token; preferences?.edit()?.putString("token", token)?.apply() }

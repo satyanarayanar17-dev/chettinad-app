@@ -116,13 +116,13 @@ import com.example.domain.model.Role
         if (points.isNotEmpty()) InfoCard("Recent readings", "Values are shown as recorded. These charts do not provide a diagnosis.") { TrendLine(points.sortedBy { it.first }.takeLast(30).map { it.second }, records.firstOrNull()?.unit ?: state.timeline.firstNotNullOfOrNull { it.observation?.components?.firstOrNull()?.unit }.orEmpty()) }
     }
     if (records.isEmpty() && state.timeline.none { it.task_type == recordType || it.observation?.observation_type == recordType }) EmptyCard("No entries yet", "Your recorded history will appear here.")
-    records.forEach { row -> InfoCard(if (row.record_type == "ACTIVITY") row.activity_name.orEmpty() else label(row.record_type), displayDate(row.observed_at)) {
+    PagedRows(records) { row -> InfoCard(if (row.record_type == "ACTIVITY") row.activity_name.orEmpty() else label(row.record_type), displayDate(row.observed_at)) {
         if (row.record_type == "ACTIVITY") Text("${row.duration_minutes} minutes")
         else Text("${row.numeric_value ?: "—"}${row.secondary_numeric_value?.let { " / $it" }.orEmpty()} ${row.unit.orEmpty()}", style = MaterialTheme.typography.titleLarge)
         row.timing_context?.let { Text(label(it)) }; row.patient_note?.let { Text(it) }
         Text("Patient recorded", style = MaterialTheme.typography.labelSmall)
     } }
-    state.timeline.filter { it.task_type == recordType || it.observation?.observation_type == recordType }.forEach { row -> InfoCard(row.title ?: label(row.task_type.orEmpty()), displayDate(row.recorded_at)) {
+    PagedRows(state.timeline.filter { it.task_type == recordType || it.observation?.observation_type == recordType }) { row -> InfoCard(row.title ?: label(row.task_type.orEmpty()), displayDate(row.recorded_at)) {
         StatusPill(row.status)
         row.observation?.components?.forEach { Text("${it.numeric_value} ${it.unit}") }
         row.patient_note?.let { Text(it) }
@@ -132,6 +132,7 @@ import com.example.domain.model.Role
 @Composable private fun SelfRecordForm(vm: PortalViewModel, state: PortalState) {
     var type by remember { mutableStateOf("GLUCOSE") }; var first by remember { mutableStateOf("") }; var second by remember { mutableStateOf("") }
     var timing by remember { mutableStateOf("FASTING") }; var note by remember { mutableStateOf("") }; var activity by remember { mutableStateOf("Walking") }
+    LaunchedEffect(state.message) { if (state.message == "Record saved") { first = ""; second = ""; note = "" } }
     val units = mapOf("GLUCOSE" to "mg/dL", "BLOOD_PRESSURE" to "mmHg", "WEIGHT" to "kg", "TEMPERATURE" to "°C", "PULSE" to "bpm", "SPO2" to "%")
     InfoCard("Add your record", "Saved as patient reported data, with the current time.") {
         ChoiceRow(units.keys.toList() + "ACTIVITY", type, { type = it; first = ""; second = "" }, !state.busy)

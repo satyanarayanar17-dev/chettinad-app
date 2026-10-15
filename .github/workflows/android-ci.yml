@@ -1,83 +1,88 @@
 name: Android CI
-
 on:
   push:
-    branches: [ "main" ]
+    branches: [main]
   pull_request:
-    branches: [ "main" ]
-
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 25
     steps:
-    - uses: actions/checkout@v4
-
-    - name: set up JDK 21
-      uses: actions/setup-java@v4
-      with:
-        java-version: '21'
-        distribution: 'temurin'
-
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v4
-      with:
-        gradle-version: '9.3.1'
-
-    - name: Run Core Tests
-      run: gradle :core:testDemoDebugUnitTest
-
-    - name: Run Patient Tests
-      run: gradle :app-patient:testDemoDebugUnitTest
-
-    - name: Run Staff Tests
-      run: gradle :app-staff:testDemoDebugUnitTest
-
-    - name: Build Patient Demo Debug APK
-      run: gradle :app-patient:assembleDemoDebug
-
-    - name: Build Staff Demo Debug APK
-      run: gradle :app-staff:assembleDemoDebug
-
-    - name: Rename Patient APK
-      run: |
-        PATIENT_APK=$(find app-patient/build/outputs/apk -name "*.apk" | head -n 1)
-        if [ -n "$PATIENT_APK" ]; then
-          mv "$PATIENT_APK" Chettinad-Care-Patient-demo.apk
-        else
-          echo "Patient APK not found"
-          exit 1
-        fi
-
-    - name: Rename Staff APK
-      run: |
-        STAFF_APK=$(find app-staff/build/outputs/apk -name "*.apk" | head -n 1)
-        if [ -n "$STAFF_APK" ]; then
-          mv "$STAFF_APK" Chettinad-Care-Staff-demo.apk
-        else
-          echo "Staff APK not found"
-          exit 1
-        fi
-
-    - name: Generate Checksums
-      run: |
-        sha256sum Chettinad-Care-Patient-demo.apk Chettinad-Care-Staff-demo.apk > SHA256SUMS.txt
-        cat SHA256SUMS.txt
-
-    - name: Upload Patient APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: Chettinad-Care-Patient-Demo
-        path: Chettinad-Care-Patient-demo.apk
-
-    - name: Upload Staff APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: Chettinad-Care-Staff-Demo
-        path: Chettinad-Care-Staff-demo.apk
-
-    - name: Upload Checksums
-      uses: actions/upload-artifact@v4
-      with:
-        name: SHA256SUMS
-        path: SHA256SUMS.txt
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+      - name: Test and build both apps
+        run: gradle --continue :core:testDemoDebugUnitTest :app-patient:testDemoDebugUnitTest :app-staff:testDemoDebugUnitTest :app-patient:assembleDemoDebug :app-staff:assembleDemoDebug
+      - name: Upload test results and native UI captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-Test-Reports
+          path: |
+            **/build/reports/tests/
+            **/build/test-results/
+            core/build/qa/
+      - name: Upload Patient APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Chettinad-Care-Patient-Demo
+          path: app-patient/build/outputs/apk/demo/debug/app-patient-demo-debug.apk
+      - name: Upload Staff APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Chettinad-Care-Staff-Demo
+          path: app-staff/build/outputs/apk/demo/debug/app-staff-demo-debug.apk
+  native-smoke:
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+      - uses: actions/download-artifact@v4
+        with:
+          name: Chettinad-Care-Patient-Demo
+          path: native-apks/patient
+      - uses: actions/download-artifact@v4
+        with:
+          name: Chettinad-Care-Staff-Demo
+          path: native-apks/staff
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Verify native storage and launch both apps on Android 35
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          script: |
+            gradle :core:connectedDemoDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.example.portal.NativeStorageTest
+            bash scripts/android-launch-smoke.sh
+      - name: Upload emulator evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-Emulator-Evidence
+          path: |
+            core/build/reports/androidTests/
+            core/build/outputs/androidTest-results/
+            native-qa/

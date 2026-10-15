@@ -76,7 +76,8 @@ data class OtpRequestResponse(
     val sent: Boolean,
     val expires_in: Int,
     val development_code: String? = null,
-    val challenge_id: String? = null
+    val challenge_id: String? = null,
+    val retry_after: Int = 60
 )
 
 data class RefreshResponse(

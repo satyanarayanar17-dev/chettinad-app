@@ -70,7 +70,7 @@ class AuthViewModel(
                     it.copy(isLoading = false, phone = mobile,
                         otpRequested = response.sent, challengeId = response.challenge_id,
                         expiresAt = System.currentTimeMillis() + response.expires_in * 1000L,
-                        resendAt = System.currentTimeMillis() + 60_000L,
+                        resendAt = System.currentTimeMillis() + response.retry_after * 1000L,
                         demoCode = if (com.example.core.BuildConfig.DEBUG && com.example.core.BuildConfig.FLAVOR != "production") response.development_code else null,
                         profileRequired = false,
                         error = if (response.sent) null else "Code could not be sent. Please try again.")

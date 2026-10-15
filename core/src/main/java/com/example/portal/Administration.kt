@@ -31,7 +31,7 @@ import com.example.data.api.*
             Button(onClick = { vm.action("Staff account created") { vm.api.addStaff(mapOf("id" to id, "name" to name, "role" to role, "department" to department, "password" to password)); password = ""; add = false; vm.reloadStaff(vm.api.staff()) } }, enabled = !state.busy && id.matches(Regex("[a-zA-Z0-9_.-]{3,60}")) && name.isNotBlank() && department.isNotBlank() && strong) { Text("Create account") }
         }
     }
-    state.staff.forEach { member -> InfoCard(member.name, "${label(member.role)} · ${member.department.orEmpty()}") {
+    PagedRows(state.staff) { member -> InfoCard(member.name, "${label(member.role)} · ${member.department.orEmpty()}") {
         StatusPill(if (member.active) "ACTIVE" else "INACTIVE")
         if (member.id != vm.user.id) TextButton(onClick = { changing = member }, enabled = !state.busy) { Text(if (member.active) "Disable access" else "Enable access") }
     } }
@@ -68,7 +68,7 @@ import com.example.data.api.*
     ErrorCards(state, setOf("patients"), vm::refresh)
     Field("Search name, MRN or mobile", search, { search = it }, !state.busy)
     OutlinedButton(onClick = { vm.searchPatients(search) }, enabled = !state.busy && search.isNotBlank()) { Text("Find patient") }
-    state.patients.forEach { patient -> InfoCard(patient.name, "${patient.mrn} · ${patient.phone}") }
+    PagedRows(state.patients) { patient -> InfoCard(patient.name, "${patient.mrn} · ${patient.phone}") }
     OutlinedButton(onClick = { create = !create }, enabled = !state.busy) { Text(if (create) "Close registration" else "Register new patient") }
     if (create) {
         val values = remember { mutableStateMapOf<String, String>() }; var gender by remember { mutableStateOf("Not specified") }

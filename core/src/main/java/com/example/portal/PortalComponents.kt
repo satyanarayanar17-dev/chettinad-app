@@ -46,7 +46,11 @@ fun validDate(value: String): Boolean = runCatching {
     }
 }
 @Composable fun StatusPill(status: String) {
-    SuggestionChip(onClick = {}, label = { Text(label(status), style = MaterialTheme.typography.labelMedium) })
+    val positive = status in setOf("AUTHORIZED", "COMPLETED", "TAKEN", "ACTIVE", "REVIEWED")
+    Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+        color = if (positive) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer) {
+        Text(label(status), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+    }
 }
 @Composable fun EmptyCard(title: String, description: String) { InfoCard(title, description) }
 @Composable fun ErrorCards(state: PortalState, sections: Set<String>, retry: () -> Unit) {
@@ -78,7 +82,7 @@ fun validDate(value: String): Boolean = runCatching {
 @Composable fun TrendLine(values: List<Double>, unit: String) {
     val color = MaterialTheme.colorScheme.primary
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("${values.size} readings · $unit", style = MaterialTheme.typography.labelMedium)
+        Text("${values.size} readings · $unit · Range ${values.minOrNull()}–${values.maxOrNull()}", style = MaterialTheme.typography.labelMedium)
         if (values.size > 1) Canvas(Modifier.fillMaxWidth().height(140.dp).padding(8.dp)) {
             val low = values.minOrNull() ?: 0.0; val high = values.maxOrNull() ?: 1.0
             val span = (high-low).coerceAtLeast(1.0)
@@ -95,4 +99,10 @@ fun validDate(value: String): Boolean = runCatching {
             Text("Latest ${values.lastOrNull() ?: "—"}", style = MaterialTheme.typography.labelSmall)
         }
     }
+}
+
+@Composable fun <T> PagedRows(rows: List<T>, content: @Composable (T) -> Unit) {
+    var shown by remember(rows) { mutableStateOf(25) }
+    rows.take(shown).forEach { content(it) }
+    if (shown < rows.size) OutlinedButton(onClick = { shown += 25 }) { Text("Show more (${rows.size - shown} remaining)") }
 }
