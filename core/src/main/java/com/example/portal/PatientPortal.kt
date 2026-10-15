@@ -103,6 +103,7 @@ import androidx.compose.ui.platform.LocalContext
 @Composable private fun BookingForm(vm: PortalViewModel, state: PortalState, staff: Boolean) {
     var doctor by remember { mutableStateOf("") }; var date by remember { mutableStateOf(todayIndia()) }
     var slot by remember(doctor, date) { mutableStateOf("") }; var reason by remember { mutableStateOf("") }
+    val offeredSlots = state.availableSlots(doctor, date)
     var patient by remember { mutableStateOf("") }; var search by remember { mutableStateOf("") }
     LaunchedEffect(state.message) { if (state.message == "Appointment request sent") { reason = ""; slot = "" } }
     InfoCard("New appointment", "Select an available slot. Requests need hospital confirmation.") {
@@ -114,8 +115,8 @@ import androidx.compose.ui.platform.LocalContext
         state.directory.doctors.forEach { d -> FilterChip(selected = doctor == d.id, onClick = { doctor = d.id }, enabled = !state.busy, label = { Text("${d.name} · ${d.department.orEmpty()}") }) }
         Field("Visit date (YYYY-MM-DD)", date, { date = it }, !state.busy)
         Button(onClick = { vm.slots(doctor, date) }, enabled = doctor.isNotBlank() && validDate(date) && !state.busy) { Text("Find available times") }
-        state.slots.forEach { offered -> FilterChip(selected = slot == offered.scheduled_at, onClick = { slot = offered.scheduled_at }, enabled = !state.busy, label = { Text("${displayDate(offered.scheduled_at)} · ${offered.room}") }) }
-        if (state.slots.isEmpty()) Text("Find times to see the available slots.", style = MaterialTheme.typography.bodySmall)
+        offeredSlots.forEach { offered -> FilterChip(selected = slot == offered.scheduled_at, onClick = { slot = offered.scheduled_at }, enabled = !state.busy, label = { Text("${displayDate(offered.scheduled_at)} · ${offered.room}") }) }
+        if (offeredSlots.isEmpty()) Text("Find times to see the available slots.", style = MaterialTheme.typography.bodySmall)
         Field("Reason for visit", reason, { reason = it }, !state.busy, 2)
         Button(onClick = { vm.book(doctor, slot, reason, patient.takeIf { staff }) }, enabled = !state.busy && slot.isNotBlank() && reason.isNotBlank() && (!staff || patient.isNotBlank())) { Text("Request appointment") }
     }
@@ -127,7 +128,7 @@ import androidx.compose.ui.platform.LocalContext
     if (open) {
         Field("New date (YYYY-MM-DD)", date, { date = it }, !state.busy)
         OutlinedButton(onClick = { vm.slots(appointment.doctor_id.orEmpty(), date) }, enabled = validDate(date) && appointment.doctor_id != null && !state.busy) { Text("Find times") }
-        state.slots.forEach { slot -> TextButton(onClick = { vm.appointment(appointment, "reschedule", slot.scheduled_at); open = false }, enabled = !state.busy) { Text(displayDate(slot.scheduled_at)) } }
+        state.availableSlots(appointment.doctor_id.orEmpty(), date).forEach { slot -> TextButton(onClick = { vm.appointment(appointment, "reschedule", slot.scheduled_at); open = false }, enabled = !state.busy) { Text(displayDate(slot.scheduled_at)) } }
     }
 }
 
