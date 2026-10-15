@@ -84,7 +84,7 @@ import androidx.compose.ui.platform.LocalContext
     if (!staff || vm.user.role == com.example.domain.model.Role.ADMIN) OutlinedButton(onClick = { booking = !booking }, enabled = !state.busy) { Text(if (booking) "Close booking" else "Book an appointment") }
     if (booking) BookingForm(vm, state, staff)
     if (state.appointments.isEmpty() && "appointments" !in state.errors) EmptyCard("No appointments yet", "Your booked visits will appear here.")
-    state.appointments.sortedByDescending { it.scheduled_at }.forEach { appointment ->
+    PagedRows(state.appointments.sortedByDescending { it.scheduled_at }) { appointment ->
         InfoCard(if (staff) appointment.patient_name ?: "Patient" else appointment.doctor_name ?: "Care team", displayDate(appointment.scheduled_at)) {
             StatusPill(appointment.status)
             Text(listOfNotNull(appointment.department_name, appointment.reason).joinToString(" · "))
@@ -104,6 +104,7 @@ import androidx.compose.ui.platform.LocalContext
     var doctor by remember { mutableStateOf("") }; var date by remember { mutableStateOf(todayIndia()) }
     var slot by remember(doctor, date) { mutableStateOf("") }; var reason by remember { mutableStateOf("") }
     var patient by remember { mutableStateOf("") }; var search by remember { mutableStateOf("") }
+    LaunchedEffect(state.message) { if (state.message == "Appointment request sent") { reason = ""; slot = "" } }
     InfoCard("New appointment", "Select an available slot. Requests need hospital confirmation.") {
         if (staff) {
             Field("Search patient by name or MRN", search, { search = it }, !state.busy)

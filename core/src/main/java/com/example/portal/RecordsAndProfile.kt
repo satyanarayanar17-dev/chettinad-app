@@ -35,7 +35,7 @@ import java.io.File
         "Prescriptions" -> {
             val rows = bundle?.prescriptions.orEmpty().filter { it.status == "AUTHORIZED" }
             if (rows.isEmpty() && "record" !in state.errors) EmptyCard("No prescriptions available", "Signed prescriptions appear after your consultation.")
-            rows.forEach { rx -> InfoCard("Prescription", "${rx.doctor_name ?: "Care team"} · ${displayDate(rx.created_at)}") {
+            PagedRows(rows) { rx -> InfoCard("Prescription", "${rx.doctor_name ?: "Care team"} · ${displayDate(rx.created_at)}") {
                 rx.rx_content?.diagnoses?.forEach { Text(it.name) }
                 rx.rx_content?.medications?.forEach { m -> Text("${m.name ?: m.drug_id} ${m.strength.orEmpty()}\n${m.dose} · ${m.frequency} · ${m.duration}\n${m.instructions.orEmpty()}") }
                 rx.rx_content?.advice?.let { Text("Advice: $it") }
@@ -44,7 +44,7 @@ import java.io.File
         }
         "Notes" -> {
             if (bundle?.notes.isNullOrEmpty() && "record" !in state.errors) EmptyCard("No consultation notes", "Completed consultation notes appear here.")
-            bundle?.notes?.forEach { record -> InfoCard("${record.author_name ?: "Consultation"} · ${label(record.status)}", displayDate(record.created_at)) {
+            PagedRows(bundle?.notes.orEmpty()) { record -> InfoCard("${record.author_name ?: "Consultation"} · ${label(record.status)}", displayDate(record.created_at)) {
                 record.draft_content?.let { note ->
                     listOf("Complaint" to note.complaint, "History" to note.history, "Examination" to note.examination,
                         "Assessment" to note.assessment, "Treatment" to note.treatment, "Advice" to note.advice).filter { !it.second.isNullOrBlank() }.forEach { Text("${it.first}: ${it.second}") }
@@ -57,7 +57,7 @@ import java.io.File
             if (uploadAllowed) OutlinedButton(onClick = { uploading = !uploading }, enabled = !state.busy) { Text(if (uploading) "Close upload" else "Upload a medical document") }
             if (uploading) DocumentUpload(vm, state)
             if (state.documents.isEmpty() && "documents" !in state.errors) EmptyCard("No uploaded documents", "PDF, JPEG and PNG medical records will appear here.")
-            state.documents.forEach { document -> InfoCard(document.title, "${label(document.document_type)} · ${document.clinical_date}") {
+            PagedRows(state.documents) { document -> InfoCard(document.title, "${label(document.document_type)} · ${document.clinical_date}") {
                 document.patient_note?.let { Text(it) }
                 Text("${document.original_filename} · ${document.size_bytes / 1024} KB", style = MaterialTheme.typography.bodySmall)
                 Button(onClick = { vm.action("Document opened") {
@@ -141,7 +141,7 @@ private fun printPrescription(context: Context, patient: PatientProfile, rx: Pre
     ErrorCards(state, setOf("notifications"), vm::refresh)
     TextButton(onClick = { vm.action("Notifications marked read") { vm.api.readNotifications(); vm.reloadNotices(vm.api.notifications()) } }, enabled = !state.busy) { Text("Mark all read") }
     if (state.notices.isEmpty() && "notifications" !in state.errors) EmptyCard("All caught up", "New hospital updates will appear here.")
-    state.notices.forEach { notice -> InfoCard(label(notice.code), displayDate(notice.created_at)) { if (notice.read_at == null) Text("Unread", color = MaterialTheme.colorScheme.primary) } }
+    PagedRows(state.notices) { notice -> InfoCard(label(notice.code), displayDate(notice.created_at)) { if (notice.read_at == null) Text("Unread", color = MaterialTheme.colorScheme.primary) } }
 }
 
 @Composable fun ProfilePage(vm: PortalViewModel, state: PortalState, onLogout: () -> Unit) {

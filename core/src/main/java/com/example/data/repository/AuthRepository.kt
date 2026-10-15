@@ -19,7 +19,7 @@ open class AuthRepository(
     private val tokenManager: TokenManager,
     private val cookieJar: PersistentCookieJar
 ) {
-    val currentUser: StateFlow<User?> = tokenManager.user
+    val currentUser: StateFlow<User?> = tokenManager.sessionUser
 
     open suspend fun login(credentials: Map<String, String>): Result<User> {
         return try {

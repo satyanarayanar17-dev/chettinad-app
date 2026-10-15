@@ -13,11 +13,9 @@ import retrofit2.Response
 
 class PatientAuthRepositoryTest {
     private val api = mockk<ChettinadApiService>()
-    private val tokens = mockk<TokenManager>(relaxed = true)
+    private val tokens = TokenManager()
     private val cookies = mockk<PersistentCookieJar>(relaxed = true)
     private fun repository(): AuthRepository {
-        every { tokens.getUser() } returns null
-        every { tokens.user } returns kotlinx.coroutines.flow.MutableStateFlow(null)
         return AuthRepository(api, tokens, cookies)
     }
 
@@ -29,7 +27,7 @@ class PatientAuthRepositoryTest {
         val user = repository.verifyPatientOtp("+919876543210", "123456", "challenge-1").getOrThrow()
         assertEquals("patient-42", user.id)
         coVerify { api.verifyOtp(match { it["challenge_id"] == "challenge-1" }) }
-        verify { tokens.saveUser(match { it.id == "patient-42" }) }
+        assertEquals("patient-42", tokens.getUser()?.id)
     }
 
     @Test
@@ -40,7 +38,7 @@ class PatientAuthRepositoryTest {
         val result = repository.verifyPatientOtp("+919876543210", "123456")
         assertEquals("PROFILE_REQUIRED", (result.exceptionOrNull() as PatientAuthException).code)
         assertNull(repository.currentUser.value)
-        verify(exactly = 0) { tokens.saveUser(any()) }
+        assertNull(tokens.getUser())
     }
 
     @Test
@@ -50,6 +48,7 @@ class PatientAuthRepositoryTest {
         coEvery { api.getSession() } returns SessionResponse("account-1", "Patient", "PATIENT", null, null, false)
         assertTrue(repository.verifyPatientOtp("+919876543210", "123456").isFailure)
         assertNull(repository.currentUser.value)
-        verify { tokens.clear(); cookies.clear() }
+        assertNull(tokens.getToken())
+        verify { cookies.clear() }
     }
 }

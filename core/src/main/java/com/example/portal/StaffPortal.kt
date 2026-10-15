@@ -47,7 +47,7 @@ import com.example.di.AppContainer
                     ErrorCards(state, setOf("queue"), vm::refresh)
                     val queue = state.queue.filter { if (user.role == Role.NURSE) it.status in listOf("WAITING", "TRIAGE", "WAITING_DOCTOR") else it.status in listOf("WAITING_DOCTOR", "DOCTOR_READY", "CONSULTATION", "WAITING") }
                     if (queue.isEmpty() && "queue" !in state.errors) EmptyCard("No patients waiting", "New arrivals will appear here after check-in.")
-                    queue.forEach { entry -> InfoCard(entry.patient_name, "${entry.mrn} · Token ${entry.token.orEmpty()}") {
+                    PagedRows(queue) { entry -> InfoCard(entry.patient_name, "${entry.mrn} · Token ${entry.token.orEmpty()}") {
                         StatusPill(entry.status); entry.wait_minutes?.let { Text("Waiting ${it.toInt()} minutes") }
                         Button(onClick = { vm.loadPatient(entry.patient_id, entry); patientOpen = true; patientPage = "Visit" }, enabled = !state.busy) { Text("Open visit") }
                     } }
@@ -58,14 +58,14 @@ import com.example.di.AppContainer
                 "Staff" -> StaffAdministration(vm, state)
                 "Patients" -> PatientRegistration(vm, state)
                 "Doctor schedules" -> SchedulePage(vm, state)
-                "Audit trail" -> { PageHeading("Audit trail"); ErrorCards(state, setOf("audit"), vm::refresh); state.audit.forEach { InfoCard(label(it.action.orEmpty()), displayDate(it.timestamp ?: it.created_at)) { Text("Actor: ${it.actor_id ?: it.user_id ?: "System"}") } } }
+                "Audit trail" -> { PageHeading("Audit trail"); ErrorCards(state, setOf("audit"), vm::refresh); PagedRows(state.audit) { InfoCard(label(it.action.orEmpty()), displayDate(it.timestamp ?: it.created_at)) { Text("Actor: ${it.actor_id ?: it.user_id ?: "System"}") } } }
                 "Notifications" -> NotificationsPage(vm, state)
                 "Profile" -> ProfilePage(vm, state, onLogout)
             }
         }
     }
     if (menu) ModalBottomSheet(onDismissRequest = { menu = false }) {
-        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(user.name, style = MaterialTheme.typography.titleLarge)
             destinations.forEach { destination -> TextButton(onClick = { if (!state.busy) { tab = destination; patientOpen = false; menu = false } }, modifier = Modifier.fillMaxWidth()) { Text(destination) } }
         }
@@ -186,7 +186,7 @@ import com.example.di.AppContainer
 
 @Composable fun LabList(vm: PortalViewModel, state: PortalState, labs: List<Lab>, patient: Boolean) {
     if (labs.isEmpty()) EmptyCard("No laboratory orders", "Tests and released results will appear here.")
-    labs.forEach { lab -> InfoCard(lab.name ?: "Laboratory test", lab.patient_name) {
+    PagedRows(labs) { lab -> InfoCard(lab.name ?: "Laboratory test", lab.patient_name) {
         StatusPill(lab.status)
         lab.result?.let { result -> Text("${result.value} ${result.unit}", style = MaterialTheme.typography.titleLarge); Text("Reference: ${result.reference_range}"); StatusPill(result.flag) }
         if (!patient && vm.user.role == Role.NURSE) {
