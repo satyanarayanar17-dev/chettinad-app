@@ -24,15 +24,15 @@ class AuthScreenTest {
         composeTestRule.setContent {
             LoginScreen(
                 uiState = AuthUiState(),
-                onLogin = { _, _ -> },
-                onLoginSuccess = {},
-                onErrorDismiss = {}
+                onRequestOtp = {},
+                onVerifyOtp = { _, _ -> },
+                onChangePhone = {},
+                onLoginSuccess = {}
             )
         }
 
         composeTestRule.onNodeWithText("Chettinad Care Patient Access").assertExists()
-        composeTestRule.onNodeWithText("Patient ID / Username").assertExists()
-        composeTestRule.onNodeWithText("Password / PIN").assertExists()
-        composeTestRule.onNodeWithText("Sign In").assertExists()
+        composeTestRule.onNodeWithText("Mobile number").assertExists()
+        composeTestRule.onNodeWithText("Send code").assertExists()
     }
 }

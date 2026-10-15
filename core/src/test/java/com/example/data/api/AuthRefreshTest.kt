@@ -116,6 +116,22 @@ class AuthRefreshTest {
     }
 
     @Test
+    fun invalidOtpIsNotRefreshedOrReplayed() = runBlocking {
+        mockWebServer.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse =
+                MockResponse().setResponseCode(401)
+        }
+        try {
+            apiService.verifyOtp(mapOf("phone" to "+919876543210", "code" to "123456"))
+            fail("Invalid OTP must fail")
+        } catch (error: retrofit2.HttpException) {
+            assertEquals(401, error.code())
+        }
+        assertEquals(1, mockWebServer.requestCount)
+        assertEquals("/auth/opd/otp/verify", mockWebServer.takeRequest().path)
+    }
+
+    @Test
     fun testRefreshReturns401_SessionTerminates() = runBlocking {
         mockWebServer.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {

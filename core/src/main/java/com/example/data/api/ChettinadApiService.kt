@@ -69,13 +69,14 @@ data class LoginResponse(
     val userId: String,
     val name: String?,
     val must_change_password: Boolean?,
-    val token_type: String
+    val token_type: String = "bearer"
 )
 
 data class OtpRequestResponse(
     val sent: Boolean,
     val expires_in: Int,
-    val development_code: String?
+    val development_code: String? = null,
+    val challenge_id: String? = null
 )
 
 data class RefreshResponse(
@@ -83,7 +84,7 @@ data class RefreshResponse(
     val role: String,
     val account_type: String,
     val must_change_password: Boolean?,
-    val token_type: String
+    val token_type: String = "bearer"
 )
 
 data class SessionResponse(
