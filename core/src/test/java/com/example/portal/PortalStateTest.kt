@@ -66,4 +66,32 @@ class PortalStateTest {
         assertEquals(listOf(current), state.availableSlots("doctor-b", "2026-10-17"))
         assertTrue(state.availableSlots("doctor-a", "2026-10-16").isEmpty())
     }
+    @Test fun `signing sends the reviewed patient version as well as the note version`() = runTest(dispatcher) {
+        advanceUntilIdle()
+        val record = bundle("patient-a").let { it.copy(patient = it.patient.copy(__v = 7)) }
+        coEvery { api.record("patient-a") } returns record
+        coEvery { api.complete(any(), any()) } returns NoteVersion("note-a", 3)
+        vm.loadPatient("patient-a", QueuePatient("encounter-a", "patient-a", "Synthetic", "MRN-a", "CONSULTATION", 4))
+        advanceUntilIdle(); vm.saveNote(true); advanceUntilIdle()
+        coVerify(exactly = 1) { api.complete("encounter-a", match { it.patient__v == 7 && it.__v == 0 }) }
+    }
+    @Test fun `triage carries explicit allergy review and the reviewed patient version`() = runTest(dispatcher) {
+        advanceUntilIdle()
+        coEvery { api.record("patient-a") } returns bundle("patient-a")
+        vm.loadPatient("patient-a", QueuePatient("encounter-a", "patient-a", "Synthetic", "MRN-a", "TRIAGE", 4))
+        advanceUntilIdle()
+        vm.transition("triage", mapOf("allergies" to "Synthetic allergy", "allergy_review_status" to "RECORDED"), 7, true, "Confirmed with patient")
+        advanceUntilIdle()
+        coVerify(exactly = 1) { api.encounterAction("encounter-a", "triage", match {
+            it["__v"] == 4 && it["patient__v"] == 7 && it["allergy_review_confirmed"] == true && it["allergy_change_reason"] == "Confirmed with patient"
+        }) }
+    }
+    @Test fun `an old patient search cannot replace the newer identity results`() = runTest(dispatcher) {
+        advanceUntilIdle()
+        coEvery { api.patients("old", any()) } coAnswers { delay(1000); listOf(bundle("old").patient) }
+        coEvery { api.patients("new", any()) } returns listOf(bundle("new").patient)
+        vm.searchPatients("old"); runCurrent()
+        vm.searchPatients("new"); advanceUntilIdle()
+        assertEquals("new", vm.state.value.patients.single().id)
+    }
 }

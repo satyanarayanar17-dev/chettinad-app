@@ -30,6 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class AuthRefreshTest {
     private lateinit var mockWebServer: MockWebServer
     private lateinit var apiService: ChettinadApiService
+    private lateinit var portalApi: PortalApi
     private lateinit var tokenManager: TokenManager
 
     @Before
@@ -59,6 +60,7 @@ class AuthRefreshTest {
             .build()
 
         apiService = retrofit.create(ChettinadApiService::class.java)
+        portalApi = retrofit.create(PortalApi::class.java)
         serviceRef = apiService
     }
 
@@ -129,6 +131,19 @@ class AuthRefreshTest {
         }
         assertEquals(1, mockWebServer.requestCount)
         assertEquals("/auth/opd/otp/verify", mockWebServer.takeRequest().path)
+    }
+
+    @Test fun incorrectCurrentPasswordIsNotReplayedAndKeepsTheSession() = runBlocking {
+        mockWebServer.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest) = MockResponse().setResponseCode(401)
+        }
+        try {
+            portalApi.changePassword(mapOf("currentPassword" to "Incorrect", "newPassword" to "SyntheticNew2026!"))
+            fail("Incorrect current password must fail")
+        } catch (error: retrofit2.HttpException) { assertEquals(401, error.code()) }
+        assertEquals(1, mockWebServer.requestCount)
+        assertEquals("/auth/change-password", mockWebServer.takeRequest().path)
+        assertEquals("expired-token", tokenManager.getToken())
     }
 
     @Test

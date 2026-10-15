@@ -124,8 +124,9 @@ private suspend fun openPrivateDocument(context: Context, document: PatientDocum
 }
 private fun printPrescription(context: Context, patient: PatientProfile, rx: PrescriptionRecord) {
     fun esc(v: String?) = android.text.TextUtils.htmlEncode(v.orEmpty())
+    val signedPatient = rx.rx_content?.patient_snapshot
     val rows = rx.rx_content?.medications.orEmpty().joinToString("") { "<tr><td>${esc(it.name)} ${esc(it.strength)}</td><td>${esc(it.dose)}</td><td>${esc(it.frequency)}</td><td>${esc(it.duration)}</td><td>${esc(it.instructions)}</td></tr>" }
-    val html = """<html><head><meta name="viewport" content="width=device-width"/><style>body{font-family:sans-serif;color:#191c1d;padding:24px}h1{color:#000666}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:8px;border-bottom:1px solid #ddd}</style></head><body><h1>Chettinad Care</h1><h2>Prescription</h2><p>${esc(patient.name)} · ${esc(patient.mrn)}<br/>${esc(rx.doctor_name)} · ${esc(displayDate(rx.created_at))}</p><table><tr><th>Medicine</th><th>Dose</th><th>Frequency</th><th>Duration</th><th>Instructions</th></tr>$rows</table><p>${esc(rx.rx_content?.advice)}</p><p>Prescription reference: ${esc(rx.id)}</p></body></html>"""
+    val html = """<html><head><meta name="viewport" content="width=device-width"/><style>body{font-family:sans-serif;color:#191c1d;padding:24px}h1{color:#000666}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:8px;border-bottom:1px solid #ddd}</style></head><body><h1>Chettinad Care</h1><h2>Prescription</h2><p>${esc(signedPatient?.name ?: patient.name)} · ${esc(signedPatient?.mrn ?: patient.mrn)}<br/>${esc(rx.doctor_name)} · ${esc(displayDate(rx.created_at))}</p><table><tr><th>Medicine</th><th>Dose</th><th>Frequency</th><th>Duration</th><th>Instructions</th></tr>$rows</table><p>${esc(rx.rx_content?.advice)}</p><p>Prescription reference: ${esc(rx.id)}</p></body></html>"""
     val web = WebView(context)
     web.settings.javaScriptEnabled = false
     web.webViewClient = object : android.webkit.WebViewClient() {
@@ -156,10 +157,12 @@ private fun printPrescription(context: Context, patient: PatientProfile, rx: Pre
             Text("Emergency contact: ${p.emergency_contact ?: "—"}")
         }
     }
+    if (vm.user.role == Role.PATIENT) state.record?.patient?.let { PatientProfileEditor(vm, state, it) }
     if (vm.user.role != Role.PATIENT) InfoCard("Change password") {
+        Text("Use 12–72 characters with uppercase, lowercase, a number and a symbol.")
         OutlinedTextField(current, { current = it }, label = { Text("Current password") }, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
         OutlinedTextField(password, { password = it }, label = { Text("New password") }, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-        Button(onClick = { vm.action("Password changed. Sign in again.") { vm.api.changePassword(mapOf("currentPassword" to current, "newPassword" to password)); current = ""; password = ""; onLogout() } }, enabled = current.isNotBlank() && password.length >= 8 && !state.busy) { Text("Update password") }
+        Button(onClick = { vm.action("Password changed. Sign in again.") { vm.api.changePassword(mapOf("currentPassword" to current, "newPassword" to password)); current = ""; password = ""; onLogout() } }, enabled = current.isNotBlank() && validStaffPassword(password) && !state.busy) { Text("Update password") }
     }
     InfoCard("Signed-in devices", "Revoke access for devices you no longer use.") {
         state.sessions.forEach { session ->
@@ -171,4 +174,29 @@ private fun printPrescription(context: Context, patient: PatientProfile, rx: Pre
     if (vm.user.role == Role.PATIENT) ReminderPreferences(state)
     Button(onClick = { logout = true }, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
     if (logout) ConfirmAction("Sign out?", "You will need to sign in again to access your records.", "Sign out", { logout = false }, { logout = false; onLogout() })
+}
+
+@Composable private fun PatientProfileEditor(vm: PortalViewModel, state: PortalState, profile: PatientProfile) {
+    var open by remember(profile.id) { mutableStateOf(false) }
+    OutlinedButton(onClick = { open = !open }, enabled = !state.busy) { Text(if (open) "Close profile editor" else "Edit contact details") }
+    if (!open) return
+    val fields = remember(profile.id, profile.__v) { mutableStateMapOf(
+        "email" to profile.email.orEmpty(), "address" to profile.address.orEmpty(),
+        "city" to profile.city.orEmpty(), "state" to profile.state.orEmpty(),
+        "pin_code" to profile.pin_code.orEmpty(), "emergency_contact" to profile.emergency_contact.orEmpty()) }
+    InfoCard("Contact details", "Your sign-in mobile and hospital identity require reception assistance to change.") {
+        listOf("email" to "Email (optional)", "address" to "Address", "city" to "City", "state" to "State", "pin_code" to "PIN code", "emergency_contact" to "Emergency contact mobile").forEach { (key, title) ->
+            Field(title, fields[key].orEmpty(), { fields[key] = it }, !state.busy)
+        }
+        val email = fields["email"].orEmpty().trim()
+        val phone = fields["emergency_contact"].orEmpty().replace(Regex("[\\s()-]"), "")
+        val valid = listOf("address", "city", "state").all { !fields[it].isNullOrBlank() } &&
+            fields["pin_code"].orEmpty().matches(Regex("[1-9][0-9]{5}")) &&
+            phone.matches(Regex("(?:\\+91|91|0)?[6-9][0-9]{9}")) &&
+            (email.isBlank() || android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches())
+        Button(onClick = { vm.action("Contact details updated") {
+            vm.api.updateProfile(profile.id, mapOf("__v" to profile.__v, "data" to fields.mapValues { it.value.trim() }))
+            vm.reloadPatient(); open = false
+        } }, enabled = valid && !state.busy) { Text("Save contact details") }
+    }
 }

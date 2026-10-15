@@ -17,6 +17,7 @@ interface PortalApi {
     @GET("opd/patients/{id}/record") suspend fun record(@Path("id") id: String): ClinicalBundle
     @GET("opd/patients") suspend fun patients(@Query("search") query: String, @Query("limit") limit: Int = 100): List<PatientProfile>
     @POST("opd/patients") suspend fun createPatient(@Body profile: Map<String, String>): PatientProfile
+    @PATCH("opd/patients/{id}") suspend fun updateProfile(@Path("id") id: String, @Body data: Map<String, @JvmSuppressWildcards Any>): Map<String, Any?>
     @GET("opd/notifications") suspend fun notifications(@Query("limit") limit: Int = 100, @Query("offset") offset: Int = 0): List<Notice>
     @POST("opd/notifications/read") suspend fun readNotifications(): Map<String, Any?>
     @GET("opd/care-plans/{id}") suspend fun carePlan(@Path("id") patient: String): CarePlanBundle
@@ -55,7 +56,8 @@ data class PatientProfile(
     val gender: String, val __v: Int = 1, val email: String? = null,
     val address: String? = null, val city: String? = null, val state: String? = null,
     val pin_code: String? = null, val emergency_contact: String? = null,
-    val preferred_language: String? = null, val allergies: String? = null
+    val preferred_language: String? = null, val allergies: String? = null,
+    val allergy_review_status: String? = null
 )
 data class Department(val id: String, val name: String, val prefix: String = "")
 data class Doctor(val id: String, val name: String, val department: String? = null, val schedules: List<DoctorSchedule> = emptyList())
@@ -68,7 +70,8 @@ data class EncounterRecord(val id: String, val patient_id: String, val phase: St
 data class TriageRecord(val id: String, val encounter_id: String, val data: Map<String, Any?>? = null, val created_at: String = "")
 data class ClinicalDocument(val id: String, val encounter_id: String, val status: String, val __v: Int = 0, val created_at: String = "", val author_name: String? = null, val draft_content: NoteContent? = null)
 data class NoteContent(val complaint: String? = null, val history: String? = null, val previous_history: String? = null, val examination: String? = null, val assessment: String? = null, val treatment: String? = null, val advice: String? = null, val diagnoses: List<DiagnosisApi> = emptyList(), val medications: List<Medication> = emptyList(), val follow_up: Map<String, String>? = null)
-data class PrescriptionContent(val medications: List<Medication> = emptyList(), val diagnoses: List<DiagnosisApi> = emptyList(), val advice: String? = null)
+data class PrescriptionPatientSnapshot(val id: String, val mrn: String, val name: String, val dob: String, val gender: String, val __v: Int)
+data class PrescriptionContent(val medications: List<Medication> = emptyList(), val diagnoses: List<DiagnosisApi> = emptyList(), val advice: String? = null, val patient_snapshot: PrescriptionPatientSnapshot? = null)
 data class PrescriptionRecord(val id: String, val encounter_id: String, val status: String, val created_at: String, val doctor_name: String? = null, val rx_content: PrescriptionContent? = null)
 data class ClinicalBundle(val patient: PatientProfile, val encounters: List<EncounterRecord> = emptyList(), val triage: List<TriageRecord> = emptyList(), val notes: List<ClinicalDocument> = emptyList(), val prescriptions: List<PrescriptionRecord> = emptyList(), val labs: List<Lab> = emptyList())
 data class Lab(val id: String, val encounter_id: String, val test_id: String, val status: String, val __v: Int, val name: String? = null, val patient_name: String? = null, val unit: String? = null, val reference_range: String? = null, val result: LabResult? = null)

@@ -25,6 +25,9 @@ fun displayDate(value: String?): String {
     }.getOrElse { value.take(10) }
 }
 fun label(value: String): String = value.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
+fun validStaffPassword(value: String): Boolean = value.length in 12..72 &&
+    value.any { it in 'A'..'Z' } && value.any { it in 'a'..'z' } &&
+    value.any { it in '0'..'9' } && value.any { !(it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9') }
 fun validDate(value: String): Boolean = runCatching {
     val format = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
     value.matches(Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")) && format.format(requireNotNull(format.parse(value))) == value

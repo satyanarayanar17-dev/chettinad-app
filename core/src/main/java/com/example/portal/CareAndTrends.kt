@@ -113,8 +113,11 @@ import com.example.domain.model.Role
     ChoiceRow(listOf("GLUCOSE", "BLOOD_PRESSURE", "WEIGHT", "TEMPERATURE", "PULSE", "SPO2", "ACTIVITY", "MEDICATION", "INSULIN"), recordType, { recordType = it })
     val records = state.selfRecords.filter { it.record_type == recordType }.sortedByDescending { it.observed_at }
     if (recordType !in listOf("ACTIVITY", "MEDICATION", "INSULIN")) {
-        val points = records.mapNotNull { row -> row.numeric_value?.let { row.observed_at to it } } + state.timeline.flatMap { row -> row.observation?.takeIf { it.observation_type == recordType }?.let { observation -> observation.components.map { observation.observed_at to it.numeric_value } }.orEmpty() }
-        if (points.isNotEmpty()) InfoCard("Recent readings", "Values are shown as recorded. These charts do not provide a diagnosis.") { TrendLine(points.sortedBy { it.first }.takeLast(30).map { it.second }, records.firstOrNull()?.unit ?: state.timeline.firstNotNullOfOrNull { it.observation?.components?.firstOrNull()?.unit }.orEmpty()) }
+        trendSeries(recordType, records, state.timeline).forEach { series ->
+            InfoCard("${label(series.component)} readings", "Values are shown as recorded. These charts do not provide a diagnosis.") {
+                TrendLine(series.points.map { it.second }, series.unit)
+            }
+        }
     }
     if (records.isEmpty() && state.timeline.none { it.task_type == recordType || it.observation?.observation_type == recordType }) EmptyCard("No entries yet", "Your recorded history will appear here.")
     PagedRows(records) { row -> InfoCard(if (row.record_type == "ACTIVITY") row.activity_name.orEmpty() else label(row.record_type), displayDate(row.observed_at)) {
@@ -128,6 +131,26 @@ import com.example.domain.model.Role
         row.observation?.components?.forEach { Text("${it.numeric_value} ${it.unit}") }
         row.patient_note?.let { Text(it) }
     } }
+}
+
+internal data class TrendSeries(val component: String, val unit: String, val points: List<Pair<String, Double>>)
+
+/** Never connect incompatible units or join systolic and diastolic readings into one line. */
+internal fun trendSeries(type: String, records: List<SelfRecord>, timeline: List<AdherenceEntry>): List<TrendSeries> {
+    val points = mutableListOf<Triple<Pair<String, String>, String, Double>>()
+    fun add(component: String, unit: String, at: String, value: Double?) {
+        if (value?.isFinite() == true) points += Triple(component to unit, at, value)
+    }
+    records.filter { it.record_type == type }.forEach { row ->
+        add(if (type == "BLOOD_PRESSURE") "SYSTOLIC" else type, row.unit.orEmpty(), row.observed_at, row.numeric_value)
+        if (type == "BLOOD_PRESSURE") add("DIASTOLIC", row.unit.orEmpty(), row.observed_at, row.secondary_numeric_value)
+    }
+    timeline.mapNotNull { it.observation }.filter { it.observation_type == type }.forEach { observation ->
+        observation.components.forEach { add(it.component_code, it.unit, observation.observed_at, it.numeric_value) }
+    }
+    return points.groupBy { it.first }.map { (key, rows) ->
+        TrendSeries(key.first, key.second, rows.sortedBy { it.second }.takeLast(30).map { it.second to it.third })
+    }
 }
 
 @Composable private fun SelfRecordForm(vm: PortalViewModel, state: PortalState) {
