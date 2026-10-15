@@ -73,7 +73,7 @@ class PortalStateTest {
         coEvery { api.complete(any(), any()) } returns NoteVersion("note-a", 3)
         vm.loadPatient("patient-a", QueuePatient("encounter-a", "patient-a", "Synthetic", "MRN-a", "CONSULTATION", 4))
         advanceUntilIdle(); vm.saveNote(true); advanceUntilIdle()
-        coVerify(exactly = 1) { api.complete("encounter-a", match { it.patient__v == 7 && it.__v == 0 }) }
+        coVerify(exactly = 1) { api.complete("encounter-a", match { it.patient__v == 7 && it.__v == 0 && it.data.previous_history == "" && it.data.treatment == "" }) }
     }
     @Test fun `triage carries explicit allergy review and the reviewed patient version`() = runTest(dispatcher) {
         advanceUntilIdle()

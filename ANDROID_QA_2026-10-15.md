@@ -7,11 +7,13 @@ The source audit covers the active native Patient and Staff portals against iOS 
 | Finding | Correction and check |
 | --- | --- |
 | Signing omitted the patient version required by staging/pilot/production | Send the reviewed patient version independently of the note version; assert both in view-model and HTTP contract tests. |
+| Optional consultation text serialized as JSON null, which the backend schema rejects | Normalize blank and recovered-draft text to empty strings when writing, while preserving an explicit null follow-up removal. Wire regression covers the actual serialized request. |
 | Triage began with empty allergies and could change the record without review metadata | Prefill the existing allergy record; require explicit review, a reason for changes and the patient version. Test preserved UI content and outgoing review metadata. |
 | Follow-up booking could display another doctor/date's slots | Use the same doctor/date-scoped availability as normal booking; UI regression covers both wrong doctor and wrong date. |
 | A slower patient-directory search could replace newer identity results | Cancel superseded searches and clear prior results; delayed-response regression confirms the selected query wins. |
 | Profile contact editing existed in iOS but was absent from Android | Add versioned contact/address updates, validate basic inputs and preserve sign-in mobile/identity fields. Verify the PATCH path and payload. |
 | Wrong current password could trigger authentication refresh/replay and sign the user out | Do not replay password-change credential failures; retain the session for correction. Match the backend's 12–72 character password policy. |
+| Nullable device metadata from older sessions could prevent the device list from loading | Accept missing metadata, display a fallback device label and retain session revocation; HTTP regression covers loading and revoking a legacy session. |
 | Trend charts could connect different units and omitted diastolic history | Group by measurement component and unit; show both blood-pressure series. Tests cover mixed glucose units, both BP components and irrelevant/non-finite values. |
 | Prescription printing could substitute current patient demographics for the signed identity | Retain and print the backend's signed patient snapshot, with a fallback for older prescriptions without snapshots. |
 | Backup XML retained default allow-all transfer rules despite the disabled-backup manifest flag | Replace templates with explicit exclusions for all nine storage domains in legacy/cloud/device-transfer policies; both apps use the shared policy. XML structure/domain checks pass. |
@@ -20,7 +22,7 @@ Android documents manufacturer-dependent device-transfer behavior for the manife
 
 ## Evidence
 
-- 49 unit/contract/Compose UI tests pass locally: core 36, Patient 7, Staff 6; no failures, errors or skips.
+- Final unit/contract/Compose UI suite: core 38, Patient 7, Staff 6 (51 total). Pass/fail results for the final revision are recorded on PR #1 and its workflow artifacts.
 - Both demonstration APKs build. Static analysis and final native emulator results are recorded on PR #1 and its workflow artifacts.
 - Ten additional backend pilot-safety/CORS tests pass with isolated synthetic SQLite data. These cover allergy review, patient-version signing, preserved prescription identity and role/department restrictions.
 - Earlier published baseline `ef113e9` passed both Android 35 Keystore/session/cookie tests, both application launches and coexistence. Those results do not substitute for the final audit commit's workflow.

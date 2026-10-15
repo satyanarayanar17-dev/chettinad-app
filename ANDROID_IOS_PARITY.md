@@ -60,10 +60,10 @@ Final test suite (the workflow results on PR #1 record pass/fail status):
 
 | Suite | Tests |
 | --- | ---: |
-| Core contracts, state and native UI | 36 |
+| Core contracts, state and native UI | 38 |
 | Patient | 7 |
 | Staff | 6 |
-| Total | 49 |
+| Total | 51 |
 
 Both APKs and the instrumentation test APK build successfully. Both application signatures verify with `apksigner`; package IDs are distinct, minSdk 24 and targetSdk 36. Rendered Patient Home and Staff Queue screens were inspected and the bottom-navigation labels corrected for compact widths.
 

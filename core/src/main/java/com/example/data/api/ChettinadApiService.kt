@@ -155,7 +155,14 @@ data class ConsultationData(
     val advice: String? = null,
     val medications: List<Medication> = emptyList(),
     val follow_up: Map<String, String>? = null
-)
+) {
+    /** The hospital accepts omitted/empty optional text, but rejects JSON null. */
+    fun forWrite(): ConsultationData = copy(
+        complaint = complaint.orEmpty(), history = history.orEmpty(), previous_history = previous_history.orEmpty(),
+        examination = examination.orEmpty(), assessment = assessment.orEmpty(), treatment = treatment.orEmpty(), advice = advice.orEmpty(),
+        medications = medications.map { it.copy(instructions = it.instructions.orEmpty()) }
+    )
+}
 
 data class Medication(
     val drug_id: String,

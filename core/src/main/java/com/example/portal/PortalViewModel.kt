@@ -191,7 +191,7 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
         val state = _state.value; val encounter = requireNotNull(state.encounter)
         val patient = requireNotNull(state.record?.patient)
         require(patient.id == encounter.patient_id) { "Review the current patient record before signing" }
-        val write = ConsultationWrite(state.noteVersion, state.draft, patient.__v)
+        val write = ConsultationWrite(state.noteVersion, state.draft.forWrite(), patient.__v)
         val result = if (complete) api.complete(encounter.encounter_id, write)
             else api.saveNote(encounter.encounter_id, write)
         _state.update { it.copy(noteVersion = result.__v) }

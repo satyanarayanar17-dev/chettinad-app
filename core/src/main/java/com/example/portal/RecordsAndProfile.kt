@@ -166,7 +166,7 @@ private fun printPrescription(context: Context, patient: PatientProfile, rx: Pre
     }
     InfoCard("Signed-in devices", "Revoke access for devices you no longer use.") {
         state.sessions.forEach { session ->
-            Text(session.device_name.ifBlank { "Device" }); Text("Expires ${displayDate(session.expires_at)}", style = MaterialTheme.typography.bodySmall)
+            Text(session.device_name.orEmpty().ifBlank { "Device" }); Text("Expires ${displayDate(session.expires_at)}", style = MaterialTheme.typography.bodySmall)
             if (session.current) Text("This device", color = MaterialTheme.colorScheme.secondary)
             else TextButton(onClick = { vm.action("Device signed out") { vm.api.revokeSession(session.id); vm.reloadSessions(vm.api.sessions()) } }, enabled = !state.busy) { Text("Revoke session") }
         }
