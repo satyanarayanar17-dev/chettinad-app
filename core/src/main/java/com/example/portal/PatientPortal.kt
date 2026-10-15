@@ -46,7 +46,7 @@ import androidx.compose.ui.platform.LocalContext
                     if (next == null) EmptyCard("Your next appointment", "Book a visit when you need to see your care team.")
                     else InfoCard("Your next appointment", "${next.doctor_name ?: "Care team"} · ${displayDate(next.scheduled_at)}") { StatusPill(next.status); Text(next.reason.orEmpty()) }
                     Button(onClick = { tab = "Appointments" }, modifier = Modifier.fillMaxWidth()) { Text("Book an appointment") }
-                    InfoCard("Today's care plan", "${state.today.count { it.status == "COMPLETED" }} of ${state.today.size} tasks completed") {
+                    InfoCard("Today's care plan", "${state.today.count { it.status in setOf("COMPLETED", "RECORDED", "TAKEN") }} of ${state.today.size} tasks completed") {
                         state.today.take(3).forEach { Text("${it.due_time} · ${it.title} · ${label(it.status)}") }
                         TextButton(onClick = { tab = "Care plan" }) { Text("View today's tasks") }
                     }

@@ -32,13 +32,22 @@ class PortalVisualTest {
         coEvery { api.directory() } returns Directory()
         coEvery { api.carePlan(any()) } returns CarePlanBundle()
         coEvery { api.record(any()) } returns ClinicalBundle(PatientProfile("patient-1", "MRN-1", "Anitha", "+919100000001", "1990-01-01", "Female"))
-        coEvery { api.today(any()) } returns listOf(CareOccurrence("task-1", "task-1", "Fasting glucose", "MEASUREMENT", "DUE", "Measure before breakfast", "2026-10-15", "08:00", "2026-10-15T02:30:00Z", 0, "mg/dL"))
+        val occurrence = CareOccurrence("task-1", "task-1", "Fasting glucose", "MEASUREMENT", "RECORDED", "Measure before breakfast", "2026-10-15", "08:00", "2026-10-15T02:30:00Z", 0, "mg/dL")
+        coEvery { api.today(any()) } returns listOf(
+            occurrence,
+            occurrence.copy(id = "task-2", task_id = "task-2", title = "Morning medicine", task_type = "MEDICATION", status = "TAKEN"),
+            occurrence.copy(id = "task-3", task_id = "task-3", title = "Daily activity", task_type = "ACTIVITY", status = "COMPLETED"),
+            occurrence.copy(id = "task-4", task_id = "task-4", status = "SKIPPED"),
+            occurrence.copy(id = "task-5", task_id = "task-5", status = "DUE"),
+            occurrence.copy(id = "task-6", task_id = "task-6", status = "MISSED")
+        )
         val container = mockk<AppContainer>()
         every { container.portalApi } returns api
         every { container.tokenManager } returns TokenManager()
         compose.setContent { AppTheme(darkTheme = false) { PatientPortal(container, User("patient-1", "Anitha", Role.PATIENT)) {} } }
         compose.waitForIdle()
         compose.onNodeWithText("Hello, Anitha").assertIsDisplayed()
+        compose.onNodeWithText("3 of 6 tasks completed").assertIsDisplayed()
         java.io.File("build/qa").mkdirs()
         compose.onRoot().captureRoboImage("build/qa/patient-home.png")
     }
