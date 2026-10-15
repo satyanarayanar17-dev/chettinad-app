@@ -13,7 +13,7 @@ interface ChettinadApiService {
     suspend fun requestOtp(@Body payload: Map<String, String>): OtpRequestResponse
 
     @POST("auth/opd/otp/verify")
-    suspend fun verifyOtp(@Body payload: Map<String, Any>): LoginResponse
+    suspend fun verifyOtp(@Body payload: Map<String, @JvmSuppressWildcards Any>): LoginResponse
 
     @POST("auth/refresh")
     fun refreshSync(): Call<RefreshResponse>
@@ -152,7 +152,8 @@ data class ConsultationData(
     val diagnosis_ids: List<String> = emptyList(),
     val treatment: String? = null,
     val advice: String? = null,
-    val medications: List<Medication> = emptyList()
+    val medications: List<Medication> = emptyList(),
+    val follow_up: Map<String, String>? = null
 )
 
 data class Medication(

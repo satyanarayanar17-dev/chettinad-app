@@ -19,6 +19,9 @@ data class AuthUiState(
     val otpRequested: Boolean = false,
     val challengeId: String? = null,
     val profileRequired: Boolean = false,
+    val demoCode: String? = null,
+    val expiresAt: Long = 0,
+    val resendAt: Long = 0,
     val error: String? = null,
     val user: User? = null
 )
@@ -57,12 +60,18 @@ class AuthViewModel(
             _uiState.update { it.copy(error = "Enter a valid Indian mobile number.") }
             return
         }
+        if (mobile == _uiState.value.phone && System.currentTimeMillis() < _uiState.value.resendAt) {
+            _uiState.update { it.copy(error = "Please wait a minute before requesting a new code.") }; return
+        }
         _uiState.update { it.copy(isLoading = true, error = null) }
         viewModelScope.launch {
             authRepository.requestPatientOtp(mobile).onSuccess { response ->
                 _uiState.update {
                     it.copy(isLoading = false, phone = mobile,
                         otpRequested = response.sent, challengeId = response.challenge_id,
+                        expiresAt = System.currentTimeMillis() + response.expires_in * 1000L,
+                        resendAt = System.currentTimeMillis() + 60_000L,
+                        demoCode = if (com.example.core.BuildConfig.DEBUG && com.example.core.BuildConfig.FLAVOR != "production") response.development_code else null,
                         profileRequired = false,
                         error = if (response.sent) null else "Code could not be sent. Please try again.")
                 }

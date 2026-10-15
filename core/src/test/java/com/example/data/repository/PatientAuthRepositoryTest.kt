@@ -17,6 +17,7 @@ class PatientAuthRepositoryTest {
     private val cookies = mockk<PersistentCookieJar>(relaxed = true)
     private fun repository(): AuthRepository {
         every { tokens.getUser() } returns null
+        every { tokens.user } returns kotlinx.coroutines.flow.MutableStateFlow(null)
         return AuthRepository(api, tokens, cookies)
     }
 
