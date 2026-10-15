@@ -21,6 +21,7 @@ import com.example.di.AppContainer
 @Composable fun StaffPortal(container: AppContainer, user: User, onLogout: () -> Unit) {
     val vm: PortalViewModel = viewModel(key = "staff:${user.id}", factory = PortalViewModel.factory(container.portalApi, user, container.tokenManager))
     val state by vm.state.collectAsState()
+    ForegroundPortalSync(vm)
     var tab by remember { mutableStateOf(if (user.mustChangePassword) "Profile" else if (user.role == Role.ADMIN) "Overview" else "Live queue") }
     var menu by remember { mutableStateOf(false) }; var patientPage by remember { mutableStateOf("Visit") }
     var patientOpen by remember { mutableStateOf(false) }
@@ -82,21 +83,27 @@ import com.example.di.AppContainer
     if (encounter.status == "WAITING_DOCTOR") { EmptyCard("Triage complete", "The patient is waiting for the assigned doctor."); return }
     if (encounter.status != "TRIAGE") return
     val patient = state.record?.patient ?: run { Text("Loading the patient record before triage…"); return }
+    var reviewedPatient by remember(encounter.encounter_id) { mutableStateOf(patient) }
+    val patientChanged = reviewedPatient.__v != patient.__v
     val values = remember(encounter.encounter_id) { mutableStateMapOf<String, String>() }
     var complaint by remember(encounter.encounter_id) { mutableStateOf("") }
-    var allergies by remember(encounter.encounter_id, patient.__v) { mutableStateOf(patient.allergies.orEmpty()) }
-    val originalStatus = patient.allergy_review_status ?: if (patient.allergies.isNullOrBlank()) "UNKNOWN" else "RECORDED"
-    var allergyStatus by remember(encounter.encounter_id, patient.__v) { mutableStateOf(originalStatus) }
-    var allergyConfirmed by remember(encounter.encounter_id, patient.__v) { mutableStateOf(false) }
-    var allergyReason by remember(encounter.encounter_id, patient.__v) { mutableStateOf("") }
+    var allergies by remember(encounter.encounter_id, reviewedPatient.__v) { mutableStateOf(reviewedPatient.allergies.orEmpty()) }
+    val originalStatus = reviewedPatient.allergy_review_status ?: if (reviewedPatient.allergies.isNullOrBlank()) "UNKNOWN" else "RECORDED"
+    var allergyStatus by remember(encounter.encounter_id, reviewedPatient.__v) { mutableStateOf(originalStatus) }
+    var allergyConfirmed by remember(encounter.encounter_id, reviewedPatient.__v) { mutableStateOf(false) }
+    var allergyReason by remember(encounter.encounter_id, reviewedPatient.__v) { mutableStateOf("") }
     var notes by remember(encounter.encounter_id) { mutableStateOf("") }; var priority by remember(encounter.encounter_id) { mutableStateOf("ROUTINE") }
     InfoCard("Vital signs", "Enter measured values. The hospital applies its clinical validation and escalation rules.") {
+        if (patientChanged) {
+            Text("The patient record changed in another app. Your measurements are kept here. Load and review the updated allergy record before submitting.")
+            OutlinedButton(onClick = { reviewedPatient = patient }, enabled = !state.busy) { Text("Load updated allergy record") }
+        }
         listOf("temperature" to "Temperature (°C)", "systolic" to "Systolic BP (mmHg)", "diastolic" to "Diastolic BP (mmHg)", "pulse" to "Pulse (bpm)", "spo2" to "Oxygen saturation (%)", "weight" to "Weight (kg)", "height" to "Height (cm)", "pain" to "Pain score (0–10)", "glucose" to "Glucose (mg/dL, optional)").forEach { (key, title) -> Field(title, values[key].orEmpty(), { values[key] = it }, !state.busy) }
         Field("Presenting complaint", complaint, { complaint = it }, !state.busy, 2)
         Field("Allergies", allergies, { allergies = it; allergyConfirmed = false }, !state.busy)
         ChoiceRow(listOf("UNKNOWN", "NONE_REPORTED", "RECORDED"), allergyStatus, { allergyStatus = it; allergyConfirmed = false }, !state.busy)
         Row { Checkbox(allergyConfirmed, { allergyConfirmed = it }, enabled = !state.busy); Text("I reviewed the allergy record with the patient") }
-        val allergyChanged = allergies != patient.allergies.orEmpty() || allergyStatus != originalStatus
+        val allergyChanged = allergies != reviewedPatient.allergies.orEmpty() || allergyStatus != originalStatus
         if (allergyChanged) Field("Reason for allergy update", allergyReason, { allergyReason = it }, !state.busy)
         Field("Triage notes", notes, { notes = it }, !state.busy, 2)
         ChoiceRow(listOf("ROUTINE", "URGENT", "EMERGENCY"), priority, { priority = it }, !state.busy)
@@ -114,13 +121,14 @@ import com.example.di.AppContainer
             payload["complaint"] = complaint; payload["allergies"] = allergies; payload["notes"] = notes
             payload["allergy_review_status"] = allergyStatus
             payload["priority"] = listOf("ROUTINE", "URGENT", "EMERGENCY").indexOf(priority)
-            vm.transition("triage", payload, patient.__v, true, allergyReason)
-        }, enabled = valid && !state.busy) { Text("Save triage and send to doctor") }
+            vm.transition("triage", payload, reviewedPatient.__v, true, allergyReason)
+        }, enabled = valid && !patientChanged && !state.busy) { Text("Save triage and send to doctor") }
     }
 }
 
 @Composable private fun ConsultationPage(vm: PortalViewModel, state: PortalState) {
     var confirm by remember { mutableStateOf(false) }
+    var reload by remember { mutableStateOf(false) }
     ErrorCards(state, setOf("record", "catalogues", "queue"), vm::refresh)
     val encounter = state.encounter ?: run { EmptyCard("Visit completed or unavailable", "Return to the queue for the next patient."); return }
     StatusPill(encounter.status)
@@ -131,6 +139,10 @@ import com.example.di.AppContainer
         return
     }
     if (state.record == null) { Text("Loading the patient record before editing…"); return }
+    if (state.draftConflict) InfoCard("Hospital record changed", "Another app updated this note or patient record. Your edits are kept here. Review the latest hospital draft before saving or signing.") {
+        OutlinedButton(onClick = { reload = true }, enabled = !state.busy) { Text("Review hospital draft") }
+    }
+    if (reload) ConfirmAction("Load the hospital draft?", "This replaces your unsaved local edits with the latest hospital draft and patient record. Review them before signing.", "Load hospital draft", { reload = false }, { reload = false; vm.reloadHospitalDraft() })
     if (state.draftAvailable) InfoCard("A local draft is available", "Review it against the hospital record before saving.") { OutlinedButton(onClick = vm::recoverDraft, enabled = !state.busy) { Text("Recover local draft") } }
     val draft = state.draft
     InfoCard("Consultation", "Changes are kept in an encrypted local draft. Save to hospital when ready.") {
@@ -157,8 +169,8 @@ import com.example.di.AppContainer
             TextButton(onClick = { vm.orderLab(test.id) }, enabled = !state.busy && !ordered) { Text(if (ordered) "${test.name} · ordered" else "Order ${test.name}") }
         }
     }
-    OutlinedButton(onClick = { vm.saveNote(false) }, enabled = !state.busy) { Text("Save draft to hospital") }
-    Button(onClick = { confirm = true }, enabled = !state.busy && !draft.history.isNullOrBlank() && !draft.examination.isNullOrBlank() && !draft.assessment.isNullOrBlank() && !draft.advice.isNullOrBlank() && draft.diagnosis_ids.isNotEmpty()) { Text("Complete and sign consultation") }
+    OutlinedButton(onClick = { vm.saveNote(false) }, enabled = !state.busy && !state.draftConflict) { Text("Save draft to hospital") }
+    Button(onClick = { confirm = true }, enabled = !state.busy && !state.draftConflict && !draft.history.isNullOrBlank() && !draft.examination.isNullOrBlank() && !draft.assessment.isNullOrBlank() && !draft.advice.isNullOrBlank() && draft.diagnosis_ids.isNotEmpty()) { Text("Complete and sign consultation") }
     if (confirm) ConfirmAction("Sign this consultation?", "Review the patient identity, diagnosis, medicines, advice and follow-up. Signing finalizes this visit and releases the prescription.", "Sign and complete", { confirm = false }, { confirm = false; vm.saveNote(true) })
 }
 

@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 @Composable fun PatientPortal(container: AppContainer, user: User, onLogout: () -> Unit) {
     val vm: PortalViewModel = viewModel(key = "patient:${user.id}", factory = PortalViewModel.factory(container.portalApi, user, container.tokenManager))
     val state by vm.state.collectAsState()
+    ForegroundPortalSync(vm)
     val context = LocalContext.current
     LaunchedEffect(state.today) { CareReminders.schedule(context, state.today) }
     var tab by remember { mutableStateOf("Home") }

@@ -180,11 +180,14 @@ private fun printPrescription(context: Context, patient: PatientProfile, rx: Pre
     var open by remember(profile.id) { mutableStateOf(false) }
     OutlinedButton(onClick = { open = !open }, enabled = !state.busy) { Text(if (open) "Close profile editor" else "Edit contact details") }
     if (!open) return
-    val fields = remember(profile.id, profile.__v) { mutableStateMapOf(
-        "email" to profile.email.orEmpty(), "address" to profile.address.orEmpty(),
-        "city" to profile.city.orEmpty(), "state" to profile.state.orEmpty(),
-        "pin_code" to profile.pin_code.orEmpty(), "emergency_contact" to profile.emergency_contact.orEmpty()) }
+    val reviewed = remember(profile.id) { profile }
+    val changed = reviewed.__v != profile.__v
+    val fields = remember(profile.id) { mutableStateMapOf(
+        "email" to reviewed.email.orEmpty(), "address" to reviewed.address.orEmpty(),
+        "city" to reviewed.city.orEmpty(), "state" to reviewed.state.orEmpty(),
+        "pin_code" to reviewed.pin_code.orEmpty(), "emergency_contact" to reviewed.emergency_contact.orEmpty()) }
     InfoCard("Contact details", "Your sign-in mobile and hospital identity require reception assistance to change.") {
+        if (changed) Text("Your hospital profile changed in another app. Your edits are kept here. Close and reopen the editor to review the latest details.")
         listOf("email" to "Email (optional)", "address" to "Address", "city" to "City", "state" to "State", "pin_code" to "PIN code", "emergency_contact" to "Emergency contact mobile").forEach { (key, title) ->
             Field(title, fields[key].orEmpty(), { fields[key] = it }, !state.busy)
         }
@@ -195,8 +198,8 @@ private fun printPrescription(context: Context, patient: PatientProfile, rx: Pre
             phone.matches(Regex("(?:\\+91|91|0)?[6-9][0-9]{9}")) &&
             (email.isBlank() || android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches())
         Button(onClick = { vm.action("Contact details updated") {
-            vm.api.updateProfile(profile.id, mapOf("__v" to profile.__v, "data" to fields.mapValues { it.value.trim() }))
+            vm.api.updateProfile(profile.id, mapOf("__v" to reviewed.__v, "data" to fields.mapValues { it.value.trim() }))
             vm.reloadPatient(); open = false
-        } }, enabled = valid && !state.busy) { Text("Save contact details") }
+        } }, enabled = valid && !changed && !state.busy) { Text("Save contact details") }
     }
 }
