@@ -44,4 +44,26 @@ class PortalStateTest {
         gate.complete(Unit); advanceUntilIdle()
         assertFalse(vm.state.value.busy)
     }
+    @Test fun `slots are only offered for the searched doctor and date`() = runTest(dispatcher) {
+        advanceUntilIdle()
+        val slot = Slot("2026-10-16T05:00:00Z", "2026-10-16T05:15:00Z")
+        coEvery { api.slots("doctor-a", "2026-10-16") } returns listOf(slot)
+        vm.slots("doctor-a", "2026-10-16"); advanceUntilIdle()
+        val state = vm.state.value
+        assertEquals(listOf(slot), state.availableSlots("doctor-a", "2026-10-16"))
+        assertTrue(state.availableSlots("doctor-b", "2026-10-16").isEmpty())
+        assertTrue(state.availableSlots("doctor-a", "2026-10-17").isEmpty())
+    }
+    @Test fun `a slower slot search cannot replace a newer doctor's availability`() = runTest(dispatcher) {
+        advanceUntilIdle()
+        val old = Slot("2026-10-16T05:00:00Z", "2026-10-16T05:15:00Z")
+        val current = Slot("2026-10-17T06:00:00Z", "2026-10-17T06:15:00Z")
+        coEvery { api.slots("doctor-a", "2026-10-16") } coAnswers { delay(1000); listOf(old) }
+        coEvery { api.slots("doctor-b", "2026-10-17") } returns listOf(current)
+        vm.slots("doctor-a", "2026-10-16"); runCurrent()
+        vm.slots("doctor-b", "2026-10-17"); advanceUntilIdle()
+        val state = vm.state.value
+        assertEquals(listOf(current), state.availableSlots("doctor-b", "2026-10-17"))
+        assertTrue(state.availableSlots("doctor-a", "2026-10-16").isEmpty())
+    }
 }

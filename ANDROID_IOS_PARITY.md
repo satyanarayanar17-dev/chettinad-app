@@ -37,6 +37,8 @@ Backend authorization is authoritative. The current deployed backend allows appo
 
 All writes are explicit and single flight. Version conflicts are surfaced rather than silently overwriting records. Clinical notes are saved locally using app-private encrypted preferences scoped to staff account and encounter, then explicitly saved or signed against the hospital's note version. Local draft recovery is offered after reloading a visit.
 
+Appointment slots are bound to the doctor/date search that produced them, including across booking and rescheduling forms. Cancelled older searches cannot replace a newer result. Home care-plan progress counts recorded measurements, taken medication/insulin and completed activities; due, missed and skipped tasks do not count as completed. The staff login respects Android system-bar safe areas.
+
 No clinical request bodies or credentials are written to HTTP logs. Backups are disabled. Refresh cookies retain secure, expiry, origin and path boundaries. Sessions and view-model stores are cleared when leaving authenticated UI. Production requires an HTTPS API URL ending in `/api/v1/`; cleartext is disabled.
 
 ## Build variants
@@ -54,14 +56,14 @@ gradle :app-patient:assembleDemoDebug :app-staff:assembleDemoDebug
 
 ## Verification status
 
-Local final verification passed:
+Final test suite (the workflow results on PR #1 record pass/fail status):
 
-| Suite | Passed | Failed | Skipped |
-| --- | ---: | ---: | ---: |
-| Core contracts, state and native UI | 21 | 0 | 0 |
-| Patient | 7 | 0 | 0 |
-| Staff | 6 | 0 | 0 |
-| Total | 34 | 0 | 0 |
+| Suite | Tests |
+| --- | ---: |
+| Core contracts, state and native UI | 23 |
+| Patient | 7 |
+| Staff | 6 |
+| Total | 36 |
 
 Both APKs and the instrumentation test APK build successfully. Both application signatures verify with `apksigner`; package IDs are distinct, minSdk 24 and targetSdk 36. Rendered Patient Home and Staff Queue screens were inspected and the bottom-navigation labels corrected for compact widths.
 

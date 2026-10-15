@@ -19,6 +19,7 @@ data class PortalState(
     val errors: Map<String, String> = emptyMap(), val message: String? = null,
     val appointments: List<Appointment> = emptyList(), val queue: List<QueuePatient> = emptyList(),
     val directory: Directory = Directory(), val slots: List<Slot> = emptyList(),
+    val slotsDoctorId: String? = null, val slotsDate: String? = null,
     val record: ClinicalBundle? = null, val patientId: String? = null, val encounter: QueuePatient? = null,
     val care: CarePlanBundle = CarePlanBundle(), val today: List<CareOccurrence> = emptyList(),
     val timeline: List<AdherenceEntry> = emptyList(), val selfRecords: List<SelfRecord> = emptyList(),
@@ -28,7 +29,10 @@ data class PortalState(
     val catalogues: PortalCatalogues = PortalCatalogues(), val labs: List<Lab> = emptyList(),
     val patients: List<PatientProfile> = emptyList(), val noteVersion: Int = 0,
     val draft: ConsultationData = ConsultationData(), val draftAvailable: Boolean = false
-)
+) {
+    fun availableSlots(doctorId: String, date: String): List<Slot> =
+        if (slotsDoctorId == doctorId && slotsDate == date) slots else emptyList()
+}
 
 class PortalViewModel(val api: PortalApi, val user: User, private val tokens: TokenManager) : ViewModel() {
     private val _state = MutableStateFlow(PortalState())
@@ -113,7 +117,7 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
     }
 
     fun slots(doctor: String, date: String) {
-        slotsLoad?.cancel(); _state.update { it.copy(slots = emptyList()) }
+        slotsLoad?.cancel(); _state.update { it.copy(slots = emptyList(), slotsDoctorId = doctor, slotsDate = date) }
         slotsLoad = viewModelScope.launch { read("slots", { api.slots(doctor, date) }) { s,v -> s.copy(slots = v) } }
     }
     fun reloadStaff(staff: List<StaffMember>) { _state.update { it.copy(staff = staff) } }
