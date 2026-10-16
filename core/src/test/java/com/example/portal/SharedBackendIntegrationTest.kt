@@ -86,7 +86,8 @@ class SharedBackendIntegrationTest {
         assertEquals("DUE", due.status)
         patient.recordAdherence(due.id, mapOf("__v" to due.__v, "date" to due.occurrence_date, "status" to "RECORDED", "value" to 112.5, "unit" to "mg/dL"))
         val sharedResponse = nurse.timeline(profile.id).first { it.observation?.components?.any { value -> value.numeric_value == 112.5 } == true }
-        assertEquals("COMPLETED", sharedResponse.status)
+        assertEquals("RECORDED", sharedResponse.status)
+        assertEquals("COMPLETED", patient.today(profile.id).first { it.task_id == sharedTask.id }.status)
         denied(409) { patient.recordAdherence(due.id, mapOf("__v" to due.__v, "date" to due.occurrence_date, "status" to "RECORDED", "value" to 120.0, "unit" to "mg/dL")) }
 
         val changed = patient.addSelfRecord(profile.id, mapOf("record_type" to "GLUCOSE", "numeric_value" to 112.5,
