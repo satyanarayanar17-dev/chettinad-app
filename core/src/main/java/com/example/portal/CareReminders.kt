@@ -67,13 +67,22 @@ class CareReminderReceiver : BroadcastReceiver() {
     var denied by remember { mutableStateOf(false) }
     val request = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         denied = !granted; enabled = granted; CareReminders.enable(context, granted)
-        if (granted) CareReminders.schedule(context, state.today)
+        if (granted) CareReminders.schedule(context, reminderTasks(state))
     }
     InfoCard("Care plan reminders", "Optional reminders for the tasks loaded today. Timing may vary with your device settings; open the app daily to refresh them.") {
         Switch(checked = enabled, onCheckedChange = { value ->
             if (value && Build.VERSION.SDK_INT >= 33) request.launch(Manifest.permission.POST_NOTIFICATIONS)
-            else { enabled = value; CareReminders.enable(context, value); if (value) CareReminders.schedule(context, state.today) }
+            else { enabled = value; CareReminders.enable(context, value); if (value) CareReminders.schedule(context, reminderTasks(state)) }
         })
         if (denied) Text("Notifications are disabled in system settings.")
     }
+}
+
+/** The today endpoint omits reminder policy; join the authoritative care-plan rows before scheduling. */
+internal fun reminderTasks(state: PortalState): List<CareOccurrence> {
+    val plan = state.care.plan ?: return emptyList()
+    if (plan.status != "ACTIVE" || "care plan" in state.errors || "today" in state.errors) return emptyList()
+    val enabled = state.care.tasks.filter { task -> task.status == "ACTIVE" &&
+        (task.reminder_enabled == true || task.reminder_enabled == 1 || task.reminder_enabled == 1.0) }.map { it.id }.toSet()
+    return state.today.filter { it.task_id in enabled && it.medication_source?.get("outdated") != true }
 }

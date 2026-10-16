@@ -23,7 +23,7 @@ import androidx.compose.ui.platform.LocalContext
     val state by vm.state.collectAsState()
     ForegroundPortalSync(vm)
     val context = LocalContext.current
-    LaunchedEffect(state.today) { CareReminders.schedule(context, state.today) }
+    LaunchedEffect(state.today, state.care, state.errors) { CareReminders.schedule(context, reminderTasks(state)) }
     var tab by remember { mutableStateOf("Home") }
     var more by remember { mutableStateOf(false) }
     val primary = listOf("Home" to Icons.Outlined.Home, "Care plan" to Icons.Outlined.Checklist,
