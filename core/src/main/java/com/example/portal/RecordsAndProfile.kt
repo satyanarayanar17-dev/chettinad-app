@@ -23,7 +23,7 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 
-@Composable fun RecordsPage(vm: PortalViewModel, state: PortalState, uploadAllowed: Boolean) {
+@Composable fun RecordsPage(vm: PortalViewModel, state: PortalState, uploadAllowed: Boolean, onAmend: (() -> Unit)? = null) {
     val context = LocalContext.current
     var section by remember { mutableStateOf("Prescriptions") }
     var uploading by remember { mutableStateOf(false) }
@@ -50,6 +50,7 @@ import java.io.File
                         "Assessment" to note.assessment, "Treatment" to note.treatment, "Advice" to note.advice).filter { !it.second.isNullOrBlank() }.forEach { Text("${it.first}: ${it.second}") }
                     note.diagnoses.forEach { Text("Diagnosis: ${it.name}") }
                 }
+                if (onAmend != null && canAmend(bundle, record, vm.user)) OutlinedButton(onClick = { vm.beginAmendment(record); onAmend() }, enabled = !state.busy) { Text("Amend signed consultation") }
             } }
         }
         "Lab results" -> LabList(vm, state, bundle?.labs.orEmpty(), patient = uploadAllowed)

@@ -167,4 +167,40 @@ class PortalStateTest {
         gate.complete(Unit); advanceUntilIdle()
         assertFalse(vm.state.value.busy)
     }
+    private fun signedRecord(version: Int = 2, history: String = "Signed history") = record(version, history).let { bundle ->
+        bundle.copy(encounters = listOf(EncounterRecord(encounter.encounter_id, "patient-a", assigned_doctor_id = "doctor-1", is_discharged = 1)),
+            notes = bundle.notes.map { it.copy(status = "FINALIZED", author_id = "doctor-1") })
+    }
+    @Test fun `amendments retain reviewed versions and use a separate encrypted recovery draft`() = runTest(dispatcher) {
+        advanceUntilIdle()
+        coEvery { api.record("patient-a") } returns signedRecord()
+        vm.loadPatient("patient-a"); advanceUntilIdle()
+        vm.beginAmendment(vm.state.value.record!!.notes.single())
+        vm.updateDraft(vm.state.value.draft.copy(history = "Clarified signed history"))
+        vm.updateAmendmentReason("Reviewed with patient")
+        verify { tokens.saveDraft("doctor-1", "amend:encounter-a", any()) }
+        coEvery { api.record("patient-a") } returns signedRecord(3, "Amended from web")
+        vm.sync(); advanceUntilIdle()
+        assertEquals("Clarified signed history", vm.state.value.draft.history)
+        assertEquals(2, vm.state.value.noteVersion); assertTrue(vm.state.value.draftConflict)
+        vm.saveAmendment(); advanceUntilIdle()
+        coVerify(exactly = 0) { api.amend(any(), any()) }
+        vm.reloadHospitalDraft(); advanceUntilIdle()
+        assertEquals("Amended from web", vm.state.value.draft.history)
+        assertEquals("encounter-a", vm.state.value.amendingEncounterId)
+        assertEquals(3, vm.state.value.noteVersion); assertFalse(vm.state.value.draftConflict)
+        vm.updateDraft(vm.state.value.draft.copy(history = "Reviewed updated history"))
+        vm.saveAmendment(); advanceUntilIdle()
+        coVerify(exactly = 1) { api.amend("encounter-a", match { it.__v == 3 && it.patient__v == 7 && it.reason == "Reviewed with patient" }) }
+    }
+    @Test fun `only the assigned doctor can amend a discharged finalized consultation`() = runTest(dispatcher) {
+        advanceUntilIdle()
+        val record = signedRecord(); val note = record.notes.single()
+        assertTrue(canAmend(record, note, vm.user))
+        assertFalse(canAmend(record, note, vm.user.copy(id = "other-doctor")))
+        assertFalse(canAmend(record, note, vm.user.copy(role = Role.NURSE)))
+        assertFalse(canAmend(record.copy(encounters = record.encounters.map { it.copy(is_discharged = 0) }), note, vm.user))
+        assertFalse(canAmend(record, note.copy(status = "DRAFT"), vm.user))
+    }
+
 }

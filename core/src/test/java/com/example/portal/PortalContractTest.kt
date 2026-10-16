@@ -67,20 +67,49 @@ class PortalContractTest {
     }
     @Test fun `weekly task edits preserve the prescribed recurrence and response window`() {
         val existing = CareTask("task", "Medication", "Original instruction", "MEDICATION", "ACTIVE", 2, "08:00", "2026-10-15", frequency_type = "SELECTED_DAYS", weekdays_mask = 42, window_before_minutes = 10, window_after_minutes = 30, expected_duration_minutes = 20, reminder_enabled = false)
-        val payload = mutableMapOf<String, Any>("frequency_type" to "DAILY", "instruction" to "Clarified instruction")
-        preserveRecurrence(payload, existing)
+        val payload = CareSchedule.from(existing).payload(existing.start_date)
         assertEquals("SELECTED_DAYS", payload["frequency_type"])
         assertEquals(42, payload["weekdays_mask"])
         assertEquals(30, payload["window_after_minutes"])
         assertEquals(20, payload["expected_duration_minutes"]); assertEquals(false, payload["reminder_enabled"])
-        assertEquals("Clarified instruction", payload["instruction"])
     }
     @Test fun `one-off task edits retain the occurrence date`() {
         val existing = CareTask("task", "Task", "Instruction", "ACTIVITY", "ACTIVE", 1, "08:00", "2026-10-15", frequency_type = "ONCE", one_time_date = "2026-10-20")
-        val payload = mutableMapOf<String, Any>("frequency_type" to "DAILY")
-        preserveRecurrence(payload, existing)
+        val payload = CareSchedule.from(existing).payload(existing.start_date)
         assertEquals("ONCE", payload["frequency_type"]); assertEquals("2026-10-20", payload["one_time_date"])
         assertFalse(payload.containsKey("weekdays_mask"))
+    }
+    @Test fun `switching recurrence removes incompatible fields and validates date windows`() {
+        val weekly = CareSchedule(frequency = "SELECTED_DAYS", weekdays = 1 or (1 shl 6))
+        assertEquals(65, weekly.payload("2026-10-16")["weekdays_mask"])
+        val interval = weekly.copy(frequency = "EVERY_N_DAYS", interval = "3")
+        assertFalse(interval.payload("2026-10-16").containsKey("weekdays_mask"))
+        assertEquals(3, interval.payload("2026-10-16")["interval_days"])
+        assertNotNull(interval.copy(interval = "0").validationError("2026-10-16"))
+        assertNotNull(weekly.copy(weekdays = 0).validationError("2026-10-16"))
+        assertNotNull(CareSchedule(frequency = "ONCE", onceDate = "2026-10-15").validationError("2026-10-16"))
+        assertNotNull(CareSchedule(frequency = "ONCE", onceDate = "2026-10-20", endDate = "2026-10-19").validationError("2026-10-16"))
+        assertNotNull(CareSchedule(before = "1441").validationError("2026-10-16"))
+        assertNotNull(CareSchedule(duration = "0").validationError("2026-10-16"))
+    }
+    @Test fun `open care forms cannot silently adopt a newer plan or task revision`() {
+        val task = CareTask("task", "Task", "Reviewed instruction", "ACTIVITY", "ACTIVE", 2, "08:00", "2026-10-15")
+        val care = CarePlanBundle(CarePlan("plan", "ACTIVE", 7, "2026-10-15"), listOf(task))
+        val review = CareTaskReview.capture(care, task)
+        assertTrue(review.matches(care))
+        assertFalse(review.matches(care.copy(plan = care.plan!!.copy(__v = 8))))
+        assertFalse(review.matches(care.copy(tasks = listOf(task.copy(revision = 3)))))
+        assertFalse(review.matches(care.copy(tasks = listOf(task.copy(status = "SUPERSEDED")))))
+        assertFalse(CareTaskReview.capture(CarePlanBundle(), null).matches(care))
+    }
+    @Test fun `amendment sends independent note and patient versions and an explicit reason`() = runBlocking {
+        server.enqueue(MockResponse().setBody("{\"success\":true}"))
+        api.amend("encounter-1", AmendmentWrite(2, ConsultationData(history = "Clarified history").forWrite(), "Reviewed with patient", 7))
+        val request = server.takeRequest()
+        assertEquals("/api/v1/opd/encounters/encounter-1/amend", request.path)
+        val body = request.body.readUtf8()
+        assertTrue(body.contains("\"patient__v\":7")); assertTrue(body.contains("\"__v\":2"))
+        assertTrue(body.contains("Reviewed with patient")); assertTrue(body.contains("Clarified history"))
     }
     @Test fun `date validation rejects impossible calendar dates`() {
         assertTrue(validDate("2024-02-29")); assertFalse(validDate("2026-02-29")); assertFalse(validDate("2026-2-01"))

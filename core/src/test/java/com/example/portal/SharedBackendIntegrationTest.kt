@@ -52,6 +52,15 @@ class SharedBackendIntegrationTest {
         assertEquals("AUTHORIZED", signed.prescriptions.first { it.encounter_id == active.encounter_id }.status)
         assertEquals(record.patient.name, signed.prescriptions.first { it.encounter_id == active.encounter_id }.rx_content?.patient_snapshot?.name)
 
+        val signedNote = signed.notes.first { it.encounter_id == active.encounter_id }
+        val amended = AmendmentWrite(signedNote.__v, draft.copy(history = "Android amended handoff history").forWrite(), "Synthetic reviewed correction", signed.patient.__v)
+        denied(403) { nurse.amend(active.encounter_id, amended) }
+        doctor.amend(active.encounter_id, amended)
+        val visibleAmendment = otherClient.record(active.patient_id)
+        assertEquals(signedNote.__v + 1, visibleAmendment.notes.first { it.id == signedNote.id }.__v)
+        assertEquals("Android amended handoff history", visibleAmendment.notes.first { it.id == signedNote.id }.draft_content?.history)
+        denied(409) { otherClient.amend(active.encounter_id, amended) }
+
         val otp = auth.requestOtp(mapOf("phone" to "+919000000001"))
         val session = auth.verifyOtp(mapOf("phone" to "+919000000001", "code" to requireNotNull(otp.development_code), "challenge_id" to requireNotNull(otp.challenge_id)))
         val patient = client(session.access_token).create(PortalApi::class.java)
@@ -63,6 +72,23 @@ class SharedBackendIntegrationTest {
         denied(409) { patient.updateProfile(profile.id, mapOf("__v" to profile.__v, "data" to mapOf("city" to "Stale edit"))) }
         denied(404) { patient.record(active.patient_id) }
         denied(403) { patient.staff() }
+        val hospitalDay = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).toString()
+        doctor.createPlan(profile.id, mapOf("start_date" to hospitalDay))
+        val plan = requireNotNull(doctor.carePlan(profile.id).plan)
+        val schedule = CareSchedule(frequency = "SELECTED_DAYS", weekdays = 127, before = "15", after = "120")
+        val task = mapOf<String, Any>("task_type" to "MEASUREMENT", "title" to "Synthetic glucose task", "instruction" to "Synthetic task instruction",
+            "scheduled_time" to "10:00", "start_date" to hospitalDay, "observation_type" to "GLUCOSE", "timing_relation" to "FASTING", "target_unit" to "mg/dL") + schedule.payload(hospitalDay)
+        doctor.createTask(profile.id, mapOf("__v" to plan.__v, "task" to task))
+        denied(409) { otherClient.createTask(profile.id, mapOf("__v" to plan.__v, "task" to task)) }
+        val sharedTask = patient.carePlan(profile.id).tasks.single()
+        assertEquals("SELECTED_DAYS", sharedTask.frequency_type); assertEquals(127, sharedTask.weekdays_mask)
+        val due = patient.today(profile.id).first { it.task_id == sharedTask.id }
+        assertEquals("DUE", due.status)
+        patient.recordAdherence(due.id, mapOf("__v" to due.__v, "date" to due.occurrence_date, "status" to "RECORDED", "value" to 112.5, "unit" to "mg/dL"))
+        val sharedResponse = nurse.timeline(profile.id).first { it.observation?.components?.any { value -> value.numeric_value == 112.5 } == true }
+        assertEquals("COMPLETED", sharedResponse.status)
+        denied(409) { patient.recordAdherence(due.id, mapOf("__v" to due.__v, "date" to due.occurrence_date, "status" to "RECORDED", "value" to 120.0, "unit" to "mg/dL")) }
+
         val changed = patient.addSelfRecord(profile.id, mapOf("record_type" to "GLUCOSE", "numeric_value" to 112.5,
             "timing_context" to "FASTING", "unit" to "mg/dL", "observed_at" to "${java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata"))}T04:30:00Z"))
         assertEquals(changed.id, nurse.selfRecords(profile.id).first().id)
