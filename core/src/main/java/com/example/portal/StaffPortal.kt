@@ -38,7 +38,7 @@ import com.example.di.AppContainer
                 ChoiceRow(listOf("Visit", "Records", "Care plan", "Trends"), patientPage, { if (!state.busy) patientPage = it })
                 when (patientPage) {
                     "Visit" -> if (user.role == Role.NURSE) TriagePage(vm, state) else ConsultationPage(vm, state)
-                    "Records" -> RecordsPage(vm, state, uploadAllowed = false)
+                    "Records" -> RecordsPage(vm, state, uploadAllowed = false, onAmend = { patientPage = "Visit" })
                     "Care plan" -> CarePlanPage(vm, state, patient = false)
                     "Trends" -> TrendsPage(vm, state, canRecord = false)
                 }
@@ -130,11 +130,14 @@ import com.example.di.AppContainer
     var confirm by remember { mutableStateOf(false) }
     var reload by remember { mutableStateOf(false) }
     ErrorCards(state, setOf("record", "catalogues", "queue"), vm::refresh)
-    val encounter = state.encounter ?: run { EmptyCard("Visit completed or unavailable", "Return to the queue for the next patient."); return }
-    StatusPill(encounter.status)
+    val amendment = state.amendingEncounterId != null
+    val encounter = state.encounter
+    if (encounter == null && !amendment) { EmptyCard("Visit completed or unavailable", "Use Records to review or amend a signed consultation, or return to the queue for the next patient."); return }
+    val encounterId = state.amendingEncounterId ?: requireNotNull(encounter).encounter_id
+    StatusPill(if (amendment) "AMENDMENT" else requireNotNull(encounter).status)
     state.record?.patient?.allergies?.takeIf { it.isNotBlank() }?.let { InfoCard("Recorded allergies", it) }
-    state.record?.triage?.filter { it.encounter_id == encounter.encounter_id }?.lastOrNull()?.let { triage -> InfoCard("Latest triage") { triage.data?.forEach { (key, value) -> if (value != null) Text("${label(key)}: $value") } } }
-    if (encounter.status != "CONSULTATION") {
+    state.record?.triage?.filter { it.encounter_id == encounterId }?.lastOrNull()?.let { triage -> InfoCard("Latest triage") { triage.data?.forEach { (key, value) -> if (value != null) Text("${label(key)}: $value") } } }
+    if (!amendment && encounter?.status != "CONSULTATION") {
         Button(onClick = { vm.transition("start") }, enabled = !state.busy && state.record != null) { Text("Start consultation") }
         return
     }
@@ -160,18 +163,24 @@ import com.example.di.AppContainer
         Field("Advice and follow-up instructions", draft.advice.orEmpty(), { vm.updateDraft(draft.copy(advice = it)) }, !state.busy, 3)
     }
     MedicationEditor(vm, state)
+    if (!amendment) {
     FollowUpEditor(vm, state)
     InfoCard("Laboratory tests") {
         var query by remember { mutableStateOf("") }
         Field("Search tests", query, { query = it }, !state.busy)
         state.catalogues.tests.filter { query.isNotBlank() && it.name.contains(query, true) }.take(20).forEach { test ->
-            val ordered = state.record.labs.any { it.encounter_id == encounter.encounter_id && it.test_id == test.id }
+            val ordered = state.record.labs.any { it.encounter_id == encounterId && it.test_id == test.id }
             TextButton(onClick = { vm.orderLab(test.id) }, enabled = !state.busy && !ordered) { Text(if (ordered) "${test.name} · ordered" else "Order ${test.name}") }
         }
     }
-    OutlinedButton(onClick = { vm.saveNote(false) }, enabled = !state.busy && !state.draftConflict) { Text("Save draft to hospital") }
-    Button(onClick = { confirm = true }, enabled = !state.busy && !state.draftConflict && !draft.history.isNullOrBlank() && !draft.examination.isNullOrBlank() && !draft.assessment.isNullOrBlank() && !draft.advice.isNullOrBlank() && draft.diagnosis_ids.isNotEmpty()) { Text("Complete and sign consultation") }
-    if (confirm) ConfirmAction("Sign this consultation?", "Review the patient identity, diagnosis, medicines, advice and follow-up. Signing finalizes this visit and releases the prescription.", "Sign and complete", { confirm = false }, { confirm = false; vm.saveNote(true) })
+    }
+    if (amendment) {
+        InfoCard("Reason for amendment", "The hospital keeps every signed version. Follow-up appointments stay linked to the original visit.") {
+            Field("Amendment reason", state.amendmentReason, vm::updateAmendmentReason, !state.busy, 2)
+        }
+    } else OutlinedButton(onClick = { vm.saveNote(false) }, enabled = !state.busy && !state.draftConflict) { Text("Save draft to hospital") }
+    Button(onClick = { confirm = true }, enabled = !state.busy && !state.draftConflict && (!amendment || state.amendmentReason.isNotBlank()) && !draft.history.isNullOrBlank() && !draft.examination.isNullOrBlank() && !draft.assessment.isNullOrBlank() && !draft.advice.isNullOrBlank() && draft.diagnosis_ids.isNotEmpty()) { Text(if (amendment) "Sign amendment" else "Complete and sign consultation") }
+    if (confirm) ConfirmAction(if (amendment) "Sign this amendment?" else "Sign this consultation?", if (amendment) "Review the patient identity, amended note, medicines and reason. This creates a new signed version visible to the patient and care team." else "Review the patient identity, diagnosis, medicines, advice and follow-up. Signing finalizes this visit and releases the prescription.", if (amendment) "Sign amendment" else "Sign and complete", { confirm = false }, { confirm = false; if (amendment) vm.saveAmendment() else vm.saveNote(true) })
 }
 
 @Composable private fun MedicationEditor(vm: PortalViewModel, state: PortalState) {

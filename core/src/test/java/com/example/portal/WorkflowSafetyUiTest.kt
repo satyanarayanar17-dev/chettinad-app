@@ -44,4 +44,17 @@ class WorkflowSafetyUiTest {
         compose.onNodeWithText("I reviewed the allergy record with the patient").assertExists()
         coVerify(exactly = 0) { vm.transition(any(), any(), any(), any(), any()) }
     }
+    @Test fun careTaskFormKeepsItsReviewedVersionWhenAnotherAppChangesThePlan() {
+        val vm = mockk<PortalViewModel>(relaxed = true)
+        val plan = CarePlan("plan-1", "ACTIVE", 7, todayIndia())
+        val state = mutableStateOf(PortalState(patientId = "patient-1", care = CarePlanBundle(plan)))
+        compose.setContent { AppTheme { Column(Modifier.verticalScroll(rememberScrollState())) { TaskEditor(vm, state.value) } } }
+        compose.onNode(hasText("Title") and hasSetTextAction()).performTextInput("Synthetic task")
+        compose.onNode(hasText("Instruction") and hasSetTextAction()).performTextInput("Synthetic instruction")
+        compose.onNodeWithText("Add task").performScrollTo().assertIsEnabled()
+        compose.runOnIdle { state.value = state.value.copy(care = CarePlanBundle(plan.copy(__v = 8))) }
+        compose.onNodeWithText("Add task").assertIsNotEnabled()
+        compose.onNodeWithText("The care plan changed in another app. Close this editor and review the updated plan before making changes.").assertExists()
+    }
+
 }

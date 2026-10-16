@@ -30,7 +30,8 @@ data class PortalState(
     val patients: List<PatientProfile> = emptyList(), val noteVersion: Int = 0,
     val draft: ConsultationData = ConsultationData(), val draftAvailable: Boolean = false,
     val draftDirty: Boolean = false, val draftConflict: Boolean = false,
-    val reviewedPatientVersion: Int? = null
+    val reviewedPatientVersion: Int? = null, val amendingNoteId: String? = null, val amendingEncounterId: String? = null,
+    val amendmentReason: String = ""
 ) {
     fun availableSlots(doctorId: String, date: String): List<Slot> =
         if (slotsDoctorId == doctorId && slotsDate == date) slots else emptyList()
@@ -109,13 +110,14 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
         _state.update { it.copy(patientLoading = true, patientId = patientId, encounter = encounter, record = null,
             care = CarePlanBundle(), today = emptyList(), timeline = emptyList(), documents = emptyList(),
             selfRecords = emptyList(), noteVersion = 0, draft = ConsultationData(), draftAvailable = false,
-            draftDirty = false, draftConflict = false, reviewedPatientVersion = null,
+            draftDirty = false, draftConflict = false, reviewedPatientVersion = null, amendingNoteId = null, amendingEncounterId = null, amendmentReason = "",
             errors = it.errors.filterKeys { key -> key !in setOf("record", "care plan", "today", "timeline", "measurements", "documents") }) }
         refreshPatient(patientId)
     }
 
     private fun mergeRecord(s: PortalState, v: ClinicalBundle): PortalState {
-        val note = v.notes.filter { it.encounter_id == s.encounter?.encounter_id }.maxByOrNull { it.__v }
+        val note = if (s.amendingNoteId != null) v.notes.find { it.id == s.amendingNoteId }
+            else v.notes.filter { it.encounter_id == s.encounter?.encounter_id }.maxByOrNull { it.__v }
         if (s.draftDirty) return s.copy(record = v, draftConflict = s.draftConflict ||
             s.noteVersion != (note?.__v ?: 0) || s.reviewedPatientVersion != v.patient.__v)
         val draft = note?.draft_content?.let { content -> ConsultationData(
@@ -125,7 +127,7 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
                         advice = content.advice, medications = content.medications, follow_up = content.follow_up) } ?: ConsultationData()
         return s.copy(record = v, noteVersion = note?.__v ?: 0, draft = draft,
             reviewedPatientVersion = v.patient.__v, draftConflict = false,
-            draftAvailable = s.encounter?.let { tokens.getDraft(user.id, it.encounter_id) != null } ?: false)
+            draftAvailable = draftStorageKey(s)?.let { tokens.getDraft(user.id, it) != null } ?: false)
     }
 
     private fun refreshPatient(patientId: String) {
@@ -143,11 +145,32 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
         }
     }
 
+    private fun draftStorageKey(s: PortalState): String? = s.amendingEncounterId?.let { "amend:$it" } ?: s.encounter?.encounter_id
+
     fun reloadHospitalDraft() {
         if (_state.value.busy) return
         val state = _state.value
-        state.encounter?.let { tokens.removeDraft(user.id, it.encounter_id) }
-        state.patientId?.let { loadPatient(it, state.encounter) }
+        draftStorageKey(state)?.let { tokens.removeDraft(user.id, it) }
+        _state.update { it.copy(draftDirty = false, draftConflict = false, draftAvailable = false) }
+        state.patientId?.let(::refreshPatient)
+    }
+
+    fun beginAmendment(note: ClinicalDocument) {
+        val s = _state.value
+        if (s.busy || !canAmend(s.record, note, user)) return
+        _state.update { mergeRecord(it.copy(encounter = null, amendingNoteId = note.id, amendingEncounterId = note.encounter_id,
+            amendmentReason = "", draftDirty = false, draftConflict = false), requireNotNull(s.record)) }
+    }
+    fun updateAmendmentReason(reason: String) { _state.update { it.copy(amendmentReason = reason) } }
+    fun saveAmendment() = action("Signed consultation amended") {
+        val s = _state.value
+        val note = requireNotNull(s.record?.notes?.find { it.id == s.amendingNoteId })
+        check(!s.draftConflict) { "Review the changed hospital record before saving or signing" }
+        require(canAmend(s.record, note, user) && s.amendmentReason.isNotBlank())
+        api.amend(requireNotNull(s.amendingEncounterId), AmendmentWrite(s.noteVersion, s.draft.forWrite(), s.amendmentReason.trim(), requireNotNull(s.reviewedPatientVersion)))
+        draftStorageKey(s)?.let { tokens.removeDraft(user.id, it) }
+        _state.update { it.copy(draftDirty = false, draftConflict = false, draftAvailable = false, amendmentReason = "") }
+        reloadPatient()
     }
 
     fun slots(doctor: String, date: String) {
@@ -212,13 +235,13 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
         patientSearch = viewModelScope.launch { read("patients", { api.patients(query) }) { s,v -> s.copy(patients = v) } }
     }
     fun updateDraft(data: ConsultationData) {
-        val encounter = _state.value.encounter ?: return
+        val key = draftStorageKey(_state.value) ?: return
         _state.update { it.copy(draft = data, draftDirty = true) }
-        tokens.saveDraft(user.id, encounter.encounter_id, draftAdapter.toJson(data))
+        tokens.saveDraft(user.id, key, draftAdapter.toJson(data))
     }
     fun recoverDraft() {
-        val encounter = _state.value.encounter ?: return
-        val saved = tokens.getDraft(user.id, encounter.encounter_id) ?: return
+        val key = draftStorageKey(_state.value) ?: return
+        val saved = tokens.getDraft(user.id, key) ?: return
         runCatching { draftAdapter.fromJson(saved) }.getOrNull()?.let { data -> _state.update { it.copy(draft = data, draftAvailable = false, draftDirty = true) } }
     }
     fun saveNote(complete: Boolean) = action(if (complete) "Consultation signed and completed" else "Draft saved to hospital") {
@@ -286,3 +309,12 @@ fun errorMessage(error: Throwable): String {
 
 internal data class ClinicalErrorEnvelope(val error: ClinicalErrorMessage)
 internal data class ClinicalErrorMessage(val message: String)
+
+/** Use the same assigned-doctor and discharged-visit restrictions as the shared API. */
+internal fun canAmend(record: ClinicalBundle?, note: ClinicalDocument, user: User): Boolean {
+    val bundle = record ?: return false
+    val visit = bundle.encounters.find { it.id == note.encounter_id } ?: return false
+    val discharged = visit.is_discharged == true || visit.is_discharged == 1 || visit.is_discharged == 1.0
+    return user.role == Role.DOCTOR && note.status == "FINALIZED" && visit.assigned_doctor_id == user.id && discharged &&
+        bundle.notes.any { it.id == note.id && it.__v == note.__v }
+}

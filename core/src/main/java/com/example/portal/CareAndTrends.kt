@@ -70,37 +70,67 @@ import com.example.domain.model.Role
     }
 }
 
-@Composable private fun TaskEditor(vm: PortalViewModel, state: PortalState, existing: CareTask? = null) {
+@Composable internal fun TaskEditor(vm: PortalViewModel, state: PortalState, existing: CareTask? = null) {
+    key(state.patientId, existing?.id) { CareTaskEditor(vm, state, existing) }
+}
+
+@Composable private fun CareTaskEditor(vm: PortalViewModel, state: PortalState, existing: CareTask?) {
+    val reviewed = remember { CareTaskReview.capture(state.care, existing) }
+    val changed = !reviewed.matches(state.care)
+    val enabled = !state.busy && !changed
     var kind by remember { mutableStateOf(existing?.task_type ?: "MEASUREMENT") }; var title by remember { mutableStateOf(existing?.title.orEmpty()) }
     var instruction by remember { mutableStateOf(existing?.instruction.orEmpty()) }; var time by remember { mutableStateOf(existing?.scheduled_time ?: "08:00") }
-    var date by remember { mutableStateOf(todayIndia()) }; var observation by remember { mutableStateOf(existing?.observation_type ?: "GLUCOSE") }
+    var date by remember { mutableStateOf(taskEffectiveDate(existing)) }; var observation by remember { mutableStateOf(existing?.observation_type ?: "GLUCOSE") }
     var timing by remember { mutableStateOf(existing?.timing_relation ?: "FASTING") }; var unit by remember { mutableStateOf(existing?.target_unit ?: "mg/dL") }
     var source by remember { mutableStateOf(existing?.prescription_item_id.orEmpty()) }
     var reason by remember { mutableStateOf("") }
-    InfoCard("New daily task", "Medication and insulin tasks must use a current, authorized prescription item.") {
-        ChoiceRow(listOf("MEASUREMENT", "ACTIVITY", "MEDICATION", "INSULIN"), kind, { kind = it }, !state.busy)
-        Field("Title", title, { title = it }, !state.busy); Field("Instruction", instruction, { instruction = it }, !state.busy, 2)
-        Field("Daily time (HH:MM)", time, { time = it }, !state.busy); Field("Start date (YYYY-MM-DD)", date, { date = it }, !state.busy)
+    var schedule by remember { mutableStateOf(CareSchedule.from(existing)) }
+    InfoCard(if (existing == null) "New care task" else "Revise care task", "Times and dates use India Standard Time. Medication and insulin tasks require a current prescription item.") {
+        if (changed) Text("The care plan changed in another app. Close this editor and review the updated plan before making changes.", color = MaterialTheme.colorScheme.error)
+        ChoiceRow(listOf("MEASUREMENT", "ACTIVITY", "MEDICATION", "INSULIN"), kind, { kind = it }, enabled)
+        Field("Title", title, { title = it }, enabled); Field("Instruction", instruction, { instruction = it }, enabled, 2)
+        Field("Scheduled time (HH:MM)", time, { time = it }, enabled)
+        Field(if (existing == null) "Start date (YYYY-MM-DD)" else "Effective date (YYYY-MM-DD)", date, { date = it }, enabled)
+        Text("Repeat", style = MaterialTheme.typography.titleSmall)
+        listOf("DAILY" to "Every day", "SELECTED_DAYS" to "Selected weekdays", "EVERY_N_DAYS" to "Every N days", "ONCE" to "Once").forEach { (value, title) ->
+            FilterChip(selected = schedule.frequency == value, onClick = { schedule = schedule.copy(frequency = value) }, enabled = enabled, label = { Text(title) })
+        }
+        when (schedule.frequency) {
+            "SELECTED_DAYS" -> listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday").forEachIndexed { day, name ->
+                val bit = 1 shl day
+                FilterChip(selected = schedule.weekdays and bit != 0, onClick = { schedule = schedule.copy(weekdays = schedule.weekdays xor bit) }, enabled = enabled, label = { Text(name) })
+            }
+            "EVERY_N_DAYS" -> Field("Interval in days (1–366)", schedule.interval, { schedule = schedule.copy(interval = it) }, enabled)
+            "ONCE" -> Field("Occurrence date (YYYY-MM-DD)", schedule.onceDate, { schedule = schedule.copy(onceDate = it) }, enabled)
+        }
+        Field("End date (optional, YYYY-MM-DD)", schedule.endDate, { schedule = schedule.copy(endDate = it) }, enabled)
+        Field("Response window before (minutes)", schedule.before, { schedule = schedule.copy(before = it) }, enabled)
+        Field("Response window after (minutes)", schedule.after, { schedule = schedule.copy(after = it) }, enabled)
+        Field("Expected duration (optional, minutes)", schedule.duration, { schedule = schedule.copy(duration = it) }, enabled)
+        Row { Checkbox(schedule.reminder, { schedule = schedule.copy(reminder = it) }, enabled = enabled); Text("Enable task reminders") }
         if (kind == "MEASUREMENT") {
-            ChoiceRow(listOf("GLUCOSE", "WEIGHT", "TEMPERATURE", "PULSE", "SPO2"), observation, { observation = it; unit = mapOf("GLUCOSE" to "mg/dL", "WEIGHT" to "kg", "TEMPERATURE" to "°C", "PULSE" to "bpm", "SPO2" to "%")[it].orEmpty(); timing = if (it == "GLUCOSE") "FASTING" else "SCHEDULED" }, !state.busy)
-            Field("Timing relation", timing, { timing = it }, !state.busy); Field("Unit", unit, { unit = it }, !state.busy)
+            ChoiceRow(listOf("GLUCOSE", "WEIGHT", "TEMPERATURE", "PULSE", "SPO2"), observation, { observation = it; unit = mapOf("GLUCOSE" to "mg/dL", "WEIGHT" to "kg", "TEMPERATURE" to "°C", "PULSE" to "bpm", "SPO2" to "%")[it].orEmpty(); timing = if (it == "GLUCOSE") "FASTING" else "SCHEDULED" }, enabled)
+            Field("Timing relation", timing, { timing = it }, enabled); Field("Unit", unit, { unit = it }, enabled)
         }
-        if (kind in listOf("MEDICATION", "INSULIN")) state.care.available_prescription_items.filter { it.prescription_version == it.current_prescription_version }.forEach { item ->
-            FilterChip(selected = source == item.id, onClick = { source = item.id }, label = { Text("${item.drug_name} ${item.strength.orEmpty()} · ${item.dose} · ${item.frequency}") })
+        val prescriptionItems = state.care.available_prescription_items.filter { it.prescription_version == it.current_prescription_version }
+        if (kind in listOf("MEDICATION", "INSULIN")) {
+            if (prescriptionItems.isEmpty()) Text("No current prescription items are available. Authorize a prescription before adding this task.")
+            prescriptionItems.forEach { item -> FilterChip(selected = source == item.id, onClick = { source = item.id }, enabled = enabled, label = { Text("${item.drug_name} ${item.strength.orEmpty()} · ${item.dose} · ${item.frequency}") }) }
         }
-        if (existing != null) { Text("Existing recurrence: ${label(existing.frequency_type)}. This revision keeps its recurrence and response window."); Field("Reason for change", reason, { reason = it }, !state.busy) }
+        if (existing != null) Field("Reason for change", reason, { reason = it }, enabled)
+        val scheduleError = schedule.validationError(date)
+        scheduleError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Button(onClick = {
-            val task = mutableMapOf<String, Any>("task_type" to kind, "title" to title, "instruction" to instruction, "frequency_type" to "DAILY", "scheduled_time" to time, "start_date" to date)
-            preserveRecurrence(task, existing)
+            val task = mutableMapOf<String, Any>("task_type" to kind, "title" to title.trim(), "instruction" to instruction.trim(), "scheduled_time" to time, "start_date" to date)
+            task.putAll(schedule.payload(date))
             if (kind == "MEASUREMENT") { task["observation_type"] = observation; task["timing_relation"] = timing; task["target_unit"] = unit }
             if (kind in listOf("MEDICATION", "INSULIN")) task["prescription_item_id"] = source
             vm.action("Care task updated") {
-                val version = requireNotNull(state.care.plan).__v
-                if (existing == null) vm.api.createTask(requireNotNull(state.patientId), mapOf("__v" to version, "task" to task))
-                else vm.api.changeTask(existing.id, mapOf("__v" to version, "expected_revision" to existing.revision, "action" to "REPLACE", "effective_date" to date, "reason" to reason, "task" to task))
+                if (existing == null) vm.api.createTask(requireNotNull(state.patientId), mapOf("__v" to requireNotNull(reviewed.planVersion), "task" to task))
+                else vm.api.changeTask(existing.id, mapOf("__v" to requireNotNull(reviewed.planVersion), "expected_revision" to requireNotNull(reviewed.taskRevision), "action" to "REPLACE", "effective_date" to date, "reason" to reason, "task" to task))
                 vm.reloadCare()
             }
-        }, enabled = !state.busy && title.isNotBlank() && instruction.isNotBlank() && validDate(date) && time.matches(Regex("([01][0-9]|2[0-3]):[0-5][0-9]")) && (kind !in listOf("MEDICATION", "INSULIN") || source.isNotBlank()) && (existing == null || reason.isNotBlank())) { Text(if (existing == null) "Add task" else "Save task revision") }
+        }, enabled = enabled && title.isNotBlank() && title.length <= 160 && instruction.isNotBlank() && instruction.length <= 1000 && scheduleError == null && time.matches(Regex("([01][0-9]|2[0-3]):[0-5][0-9]")) && (kind != "MEASUREMENT" || (timing.isNotBlank() && unit.isNotBlank())) && (kind !in listOf("MEDICATION", "INSULIN") || prescriptionItems.any { it.id == source }) && (existing == null || (reason.isNotBlank() && date > existing.start_date && date >= todayIndia()))) { Text(if (existing == null) "Add task" else "Save task revision") }
     }
 }
 
@@ -181,28 +211,53 @@ internal fun trendSeries(type: String, records: List<SelfRecord>, timeline: List
 }
 
 @Composable private fun StopTask(vm: PortalViewModel, state: PortalState, task: CareTask) {
-    var date by remember(task.id) { mutableStateOf(todayIndia()) }
+    val reviewed = remember(task.id, state.patientId) { CareTaskReview.capture(state.care, task) }
+    val changed = !reviewed.matches(state.care)
+    var date by remember(task.id) { mutableStateOf(taskEffectiveDate(task)) }
     var reason by remember(task.id) { mutableStateOf("") }
     var confirm by remember(task.id) { mutableStateOf(false) }
-    Field("Stop from date (YYYY-MM-DD)", date, { date = it }, !state.busy)
-    Field("Reason for stopping", reason, { reason = it }, !state.busy)
-    TextButton(onClick = { confirm = true }, enabled = !state.busy && validDate(date) && reason.isNotBlank()) { Text("Stop this task") }
+    Field("Stop from date (YYYY-MM-DD)", date, { date = it }, !state.busy && !changed)
+    Field("Reason for stopping", reason, { reason = it }, !state.busy && !changed)
+    TextButton(onClick = { confirm = true }, enabled = !state.busy && !changed && validDate(date) && date > task.start_date && date >= todayIndia() && reason.isNotBlank()) { Text("Stop this task") }
     if (confirm) ConfirmAction("Stop ${task.title}?", "The change takes effect on $date. The hospital will reject changes that conflict with already recorded responses.", "Stop task", { confirm = false }, {
         confirm = false
-        vm.action("Task stopped") { vm.api.changeTask(task.id, mapOf("__v" to requireNotNull(state.care.plan).__v, "expected_revision" to task.revision, "action" to "DEACTIVATE", "effective_date" to date, "reason" to reason)); vm.reloadCare() }
+        if (!changed) vm.action("Task stopped") { vm.api.changeTask(task.id, mapOf("__v" to requireNotNull(reviewed.planVersion), "expected_revision" to requireNotNull(reviewed.taskRevision), "action" to "DEACTIVATE", "effective_date" to date, "reason" to reason)); vm.reloadCare() }
     })
 }
 
-/** Instruction edits must not silently turn weekly/one-off medication schedules into daily doses. */
-internal fun preserveRecurrence(task: MutableMap<String, Any>, existing: CareTask?) {
-    if (existing == null) return
-    task["frequency_type"] = existing.frequency_type
-    existing.weekdays_mask?.let { task["weekdays_mask"] = it }
-    existing.interval_days?.let { task["interval_days"] = it }
-    existing.one_time_date?.let { task["one_time_date"] = it }
-    existing.end_date?.let { task["end_date"] = it }
-    task["window_before_minutes"] = existing.window_before_minutes
-    task["window_after_minutes"] = existing.window_after_minutes
-    existing.expected_duration_minutes?.let { task["expected_duration_minutes"] = it }
-    task["reminder_enabled"] = existing.reminder_enabled == true || existing.reminder_enabled == 1 || existing.reminder_enabled == 1.0
+internal data class CareTaskReview(val planId: String?, val planVersion: Int?, val taskId: String?, val taskRevision: Int?) {
+    fun matches(care: CarePlanBundle): Boolean = planId != null && planId == care.plan?.id && planVersion == care.plan?.__v &&
+        (taskId == null || care.tasks.any { it.id == taskId && it.revision == taskRevision && it.status == "ACTIVE" })
+    companion object { fun capture(care: CarePlanBundle, task: CareTask?) = CareTaskReview(care.plan?.id, care.plan?.__v, task?.id, task?.revision) }
+}
+
+internal fun taskEffectiveDate(task: CareTask?): String = task?.let {
+    runCatching { maxOf(todayIndia(), java.time.LocalDate.parse(it.start_date).plusDays(1).toString()) }.getOrNull()
+} ?: todayIndia()
+
+internal data class CareSchedule(
+    val frequency: String = "DAILY", val weekdays: Int = 0, val interval: String = "2", val onceDate: String = todayIndia(),
+    val endDate: String = "", val before: String = "0", val after: String = "120", val duration: String = "", val reminder: Boolean = true
+) {
+    fun validationError(start: String): String? = when {
+        !validDate(start) -> "Enter a valid start or effective date."
+        endDate.isNotBlank() && (!validDate(endDate) || endDate < start) -> "End date must be on or after the start date."
+        frequency !in listOf("DAILY", "SELECTED_DAYS", "EVERY_N_DAYS", "ONCE") -> "Choose a repeat schedule."
+        frequency == "SELECTED_DAYS" && weekdays !in 1..127 -> "Select at least one weekday."
+        frequency == "EVERY_N_DAYS" && interval.toIntOrNull() !in 1..366 -> "Enter an interval from 1 to 366 days."
+        frequency == "ONCE" && (!validDate(onceDate) || onceDate < start || (endDate.isNotBlank() && onceDate > endDate)) -> "Occurrence date must fall within the task dates."
+        before.toIntOrNull() !in 0..1440 || after.toIntOrNull() !in 0..1440 -> "Response windows must be between 0 and 1440 minutes."
+        duration.isNotBlank() && duration.toIntOrNull() !in 1..1440 -> "Duration must be between 1 and 1440 minutes."
+        else -> null
+    }
+    fun payload(start: String): Map<String, Any> {
+        require(validationError(start) == null)
+        return buildMap {
+            put("frequency_type", frequency); put("window_before_minutes", before.toInt()); put("window_after_minutes", after.toInt()); put("reminder_enabled", reminder)
+            when (frequency) { "SELECTED_DAYS" -> put("weekdays_mask", weekdays); "EVERY_N_DAYS" -> put("interval_days", interval.toInt()); "ONCE" -> put("one_time_date", onceDate) }
+            if (endDate.isNotBlank()) put("end_date", endDate)
+            if (duration.isNotBlank()) put("expected_duration_minutes", duration.toInt())
+        }
+    }
+    companion object { fun from(task: CareTask?) = task?.let { CareSchedule(it.frequency_type, it.weekdays_mask ?: 0, (it.interval_days ?: 2).toString(), it.one_time_date ?: todayIndia(), it.end_date.orEmpty(), it.window_before_minutes.toString(), it.window_after_minutes.toString(), it.expected_duration_minutes?.toString().orEmpty(), it.reminder_enabled == true || it.reminder_enabled == 1 || it.reminder_enabled == 1.0) } ?: CareSchedule() }
 }

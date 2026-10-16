@@ -37,6 +37,7 @@ interface PortalApi {
     @POST("opd/encounters/{id}/{action}") suspend fun encounterAction(@Path("id") encounter: String, @Path("action") action: String, @Body data: Map<String, @JvmSuppressWildcards Any>): Map<String, Any?>
     @PUT("opd/encounters/{id}/consultation") suspend fun saveNote(@Path("id") encounter: String, @Body data: ConsultationWrite): NoteVersion
     @POST("opd/encounters/{id}/complete") suspend fun complete(@Path("id") encounter: String, @Body data: ConsultationWrite): NoteVersion
+    @POST("opd/encounters/{id}/amend") suspend fun amend(@Path("id") encounter: String, @Body data: AmendmentWrite): Map<String, Any?>
     @GET("opd/catalogues") suspend fun catalogues(): PortalCatalogues
     @GET("opd/labs") suspend fun labs(@Query("limit") limit: Int = 500, @Query("offset") offset: Int = 0): List<Lab>
     @POST("opd/labs/{id}/{action}") suspend fun labAction(@Path("id") id: String, @Path("action") action: String, @Body data: Map<String, @JvmSuppressWildcards Any>): Map<String, Any?>
@@ -66,9 +67,9 @@ data class Directory(val departments: List<Department> = emptyList(), val doctor
 data class Slot(val scheduled_at: String, val ends_at: String, val room: String = "", val department_id: String = "")
 data class Appointment(val id: String, val scheduled_at: String, val status: String, val __v: Int, val patient_id: String? = null, val patient_name: String? = null, val mrn: String? = null, val doctor_id: String? = null, val doctor_name: String? = null, val department_name: String? = null, val reason: String? = null, val encounter_id: String? = null)
 data class QueuePatient(val encounter_id: String, val patient_id: String, val patient_name: String, val mrn: String, val status: String, val __v: Int, val token: String? = null, val doctor_name: String? = null, val doctor_id: String? = null, val patients_ahead: Int? = null, val estimated_wait: Double? = null, val wait_minutes: Double? = null)
-data class EncounterRecord(val id: String, val patient_id: String, val phase: String? = null, val __v: Int = 1)
+data class EncounterRecord(val id: String, val patient_id: String, val phase: String? = null, val __v: Int = 1, val assigned_doctor_id: String? = null, val is_discharged: Any? = null)
 data class TriageRecord(val id: String, val encounter_id: String, val data: Map<String, Any?>? = null, val created_at: String = "")
-data class ClinicalDocument(val id: String, val encounter_id: String, val status: String, val __v: Int = 0, val created_at: String = "", val author_name: String? = null, val draft_content: NoteContent? = null)
+data class ClinicalDocument(val id: String, val encounter_id: String, val status: String, val __v: Int = 0, val created_at: String = "", val author_name: String? = null, val draft_content: NoteContent? = null, val author_id: String? = null)
 data class NoteContent(val complaint: String? = null, val history: String? = null, val previous_history: String? = null, val examination: String? = null, val assessment: String? = null, val treatment: String? = null, val advice: String? = null, val diagnoses: List<DiagnosisApi> = emptyList(), val medications: List<Medication> = emptyList(), val follow_up: Map<String, String>? = null)
 data class PrescriptionPatientSnapshot(val id: String, val mrn: String, val name: String, val dob: String, val gender: String, val __v: Int)
 data class PrescriptionContent(val medications: List<Medication> = emptyList(), val diagnoses: List<DiagnosisApi> = emptyList(), val advice: String? = null, val patient_snapshot: PrescriptionPatientSnapshot? = null)
@@ -92,3 +93,5 @@ data class PatientDocument(val id: String, val title: String, val document_type:
 data class StaffMember(val id: String, val name: String, val role: String, val department: String? = null, val is_active: Any? = null) { val active: Boolean get() = is_active == true || is_active == 1 || is_active == 1.0 }
 data class AuditRow(val id: Any, val action: String? = null, val actor_id: String? = null, val user_id: String? = null, val created_at: String? = null, val timestamp: String? = null)
 data class DeviceSession(val id: String, val device_name: String? = null, val created_at: String? = null, val expires_at: String, val current: Boolean = false)
+
+data class AmendmentWrite(val __v: Int, val data: ConsultationData, val reason: String, val patient__v: Int)
