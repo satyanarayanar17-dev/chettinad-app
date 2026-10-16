@@ -66,4 +66,4 @@ Live read-only verification on 16 October returned HTTP 200 for the development 
 
 These checks do not certify production PostgreSQL persistence, real SMS delivery, release signing/distribution, physical-phone file picking/printing/notifications, accessibility/font scaling, or identical iOS/Android screen layouts. Android also does not expose every backend administration endpoint. Complete hospital acceptance remains a device-level activity.
 
-Reminder limitations match an app-refreshed daily model: notification permission is opt-in; alarms are inexact, only cover loaded upcoming tasks and are refreshed on app use. Reopening after a reboot refreshes them. No continuous background sync is claimed.
+Reminder limitations match an app-refreshed daily model: notification permission is opt-in; alarms are inexact, only cover loaded upcoming tasks allowed by the doctor’s reminder setting and are refreshed on app use. Failed policy refreshes cancel local reminders until the policy is available. Reopening after a reboot refreshes them. No continuous background sync is claimed.

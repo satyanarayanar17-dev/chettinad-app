@@ -111,6 +111,17 @@ class PortalContractTest {
         assertTrue(body.contains("\"patient__v\":7")); assertTrue(body.contains("\"__v\":2"))
         assertTrue(body.contains("Reviewed with patient")); assertTrue(body.contains("Clarified history"))
     }
+    @Test fun `local reminders honor doctor task policy and cancel when policy cannot be refreshed`() {
+        val task = CareTask("task", "Task", "Instruction", "ACTIVITY", "ACTIVE", 1, "10:00", "2026-10-16", reminder_enabled = 0.0)
+        val occurrence = CareOccurrence("task", "task", "Task", "ACTIVITY", "UPCOMING", occurrence_date = "2026-10-16", due_time = "10:00", scheduled_for = "2026-10-16T04:30:00Z", __v = 0)
+        val state = PortalState(care = CarePlanBundle(CarePlan("plan", "ACTIVE", 2, "2026-10-16"), listOf(task)), today = listOf(occurrence))
+        assertTrue(reminderTasks(state).isEmpty())
+        val enabled = state.copy(care = state.care.copy(tasks = listOf(task.copy(reminder_enabled = 1.0))))
+        assertEquals(listOf(occurrence), reminderTasks(enabled))
+        assertTrue(reminderTasks(enabled.copy(errors = mapOf("care plan" to "Unable to refresh"))).isEmpty())
+        assertTrue(reminderTasks(enabled.copy(care = CarePlanBundle())).isEmpty())
+        assertTrue(reminderTasks(enabled.copy(care = enabled.care.copy(tasks = listOf(task.copy(status = "SUPERSEDED", reminder_enabled = true))))).isEmpty())
+    }
     @Test fun `date validation rejects impossible calendar dates`() {
         assertTrue(validDate("2024-02-29")); assertFalse(validDate("2026-02-29")); assertFalse(validDate("2026-2-01"))
     }
