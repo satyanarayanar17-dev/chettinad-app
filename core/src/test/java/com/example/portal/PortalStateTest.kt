@@ -94,6 +94,7 @@ class PortalStateTest {
         vm.searchPatients("old"); runCurrent()
         vm.searchPatients("new"); advanceUntilIdle()
         assertEquals("new", vm.state.value.patients.single().id)
+        assertEquals("new", vm.state.value.patientSearchQuery); assertFalse(vm.state.value.patientSearchLoading)
     }
 
     private val encounter = QueuePatient("encounter-a", "patient-a", "Synthetic", "MRN-a", "CONSULTATION", 4)
