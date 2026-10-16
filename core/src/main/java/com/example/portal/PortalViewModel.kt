@@ -42,6 +42,7 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
     val state = _state.asStateFlow()
     private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
     private val draftAdapter = moshi.adapter(ConsultationData::class.java)
+    private val recoveryAdapter = moshi.adapter(RecoveryDraft::class.java)
     private var patientLoad: Job? = null
     private var slotsLoad: Job? = null
     private var patientSearch: Job? = null
@@ -238,14 +239,21 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
         }
     }
     fun updateDraft(data: ConsultationData) {
-        val key = draftStorageKey(_state.value) ?: return
+        val current = _state.value
+        val key = draftStorageKey(current) ?: return
+        val patientVersion = current.reviewedPatientVersion ?: return
         _state.update { it.copy(draft = data, draftDirty = true) }
-        tokens.saveDraft(user.id, key, draftAdapter.toJson(data))
+        tokens.saveDraft(user.id, key, recoveryAdapter.toJson(RecoveryDraft(data, current.noteVersion, patientVersion)))
     }
     fun recoverDraft() {
         val key = draftStorageKey(_state.value) ?: return
         val saved = tokens.getDraft(user.id, key) ?: return
-        runCatching { draftAdapter.fromJson(saved) }.getOrNull()?.let { data -> _state.update { it.copy(draft = data, draftAvailable = false, draftDirty = true) } }
+        val recovery = runCatching { recoveryAdapter.fromJson(saved) }.getOrNull()
+        val data = recovery?.data ?: runCatching { draftAdapter.fromJson(saved) }.getOrNull() ?: return
+        _state.update { current -> current.copy(draft = data, draftAvailable = false, draftDirty = true,
+            draftConflict = current.draftConflict || recovery == null || recovery.noteVersion != current.noteVersion || recovery.patientVersion != current.reviewedPatientVersion,
+            noteVersion = recovery?.noteVersion ?: current.noteVersion,
+            reviewedPatientVersion = recovery?.patientVersion ?: current.reviewedPatientVersion) }
     }
     fun saveNote(complete: Boolean) = action(if (complete) "Consultation signed and completed" else "Draft saved to hospital") {
         val state = _state.value; val encounter = requireNotNull(state.encounter)
@@ -321,3 +329,5 @@ internal fun canAmend(record: ClinicalBundle?, note: ClinicalDocument, user: Use
     return user.role == Role.DOCTOR && note.status == "FINALIZED" && visit.assigned_doctor_id == user.id && discharged &&
         bundle.notes.any { it.id == note.id && it.__v == note.__v }
 }
+
+internal data class RecoveryDraft(val data: ConsultationData, val noteVersion: Int, val patientVersion: Int)

@@ -204,4 +204,33 @@ class PortalStateTest {
         assertFalse(canAmend(record, note.copy(status = "DRAFT"), vm.user))
     }
 
+    @Test fun `recovery after a web edit keeps the original reviewed versions and blocks signing`() = runTest(dispatcher) {
+        advanceUntilIdle(); openConsultation(); advanceUntilIdle()
+        val saved = slot<String>()
+        every { tokens.saveDraft(any(), any(), capture(saved)) } just Runs
+        vm.updateDraft(vm.state.value.draft.copy(history = "Unsent local history"))
+        every { tokens.getDraft("doctor-1", "encounter-a") } returns saved.captured
+        coEvery { api.record("patient-a") } returns record(3, "Updated on web", 8)
+        vm.loadPatient("patient-a", encounter); advanceUntilIdle(); vm.recoverDraft()
+        assertEquals("Unsent local history", vm.state.value.draft.history)
+        assertEquals(2, vm.state.value.noteVersion); assertEquals(7, vm.state.value.reviewedPatientVersion)
+        assertTrue(vm.state.value.draftConflict)
+        vm.saveNote(true); advanceUntilIdle()
+        coVerify(exactly = 0) { api.complete(any(), any()) }
+        vm.reloadHospitalDraft(); advanceUntilIdle()
+        assertEquals("Updated on web", vm.state.value.draft.history); assertFalse(vm.state.value.draftConflict)
+    }
+    @Test fun `current recovery remains editable while legacy unversioned recovery requires review`() = runTest(dispatcher) {
+        advanceUntilIdle(); openConsultation(); advanceUntilIdle()
+        val saved = slot<String>()
+        every { tokens.saveDraft(any(), any(), capture(saved)) } just Runs
+        vm.updateDraft(vm.state.value.draft.copy(history = "Current local draft"))
+        every { tokens.getDraft("doctor-1", "encounter-a") } returns saved.captured
+        vm.loadPatient("patient-a", encounter); advanceUntilIdle(); vm.recoverDraft()
+        assertEquals("Current local draft", vm.state.value.draft.history); assertFalse(vm.state.value.draftConflict)
+        every { tokens.getDraft("doctor-1", "encounter-a") } returns "{\"history\":\"Legacy local draft\"}"
+        vm.loadPatient("patient-a", encounter); advanceUntilIdle(); vm.recoverDraft()
+        assertEquals("Legacy local draft", vm.state.value.draft.history); assertTrue(vm.state.value.draftConflict)
+    }
+
 }

@@ -35,7 +35,7 @@ Patient, account and encounter IDs are distinct throughout the active native flo
 
 Backend authorization is authoritative. The current deployed backend allows appointment confirmation/check-in for Admin/Doctor; Nurse sees requests but is not offered those actions. This differs from older iOS audit claims and does not weaken server roles.
 
-All writes are explicit and single flight. Version conflicts are surfaced rather than silently overwriting records. Clinical notes are saved locally using app-private encrypted preferences scoped to staff account and encounter, then explicitly saved or signed against the hospital's note version. Local draft recovery is offered after reloading a visit.
+All writes are explicit and single flight. Version conflicts are surfaced rather than silently overwriting records. Clinical notes are saved locally using app-private encrypted preferences scoped to staff account and encounter, then explicitly saved or signed against the hospital's note version. Local draft recovery is offered after reloading a visit. Recovery copies retain the reviewed patient/note versions, so reopening an older draft after a web/iOS edit cannot silently adopt newer signing versions. Legacy recovery copies require explicit hospital-draft review.
 
 Appointment slots are bound to the doctor/date search that produced them, including across booking and rescheduling forms. Cancelled older searches cannot replace a newer result. Home care-plan progress counts recorded measurements, taken medication/insulin and completed activities; due, missed and skipped tasks do not count as completed. The staff login respects Android system-bar safe areas.
 
