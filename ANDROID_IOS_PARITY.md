@@ -23,7 +23,7 @@ Updated 16 October 2026. Work started 15 October 2026. This file supersedes the 
 | Measurements | Patient-reported glucose, blood pressure, weight, temperature, pulse, SpO2 and activities |
 | Trends | Recorded values, charts, activity history and medication/insulin adherence history |
 | Reminders | Opt-in Android notifications with generic private text; inexact alarms for today's loaded upcoming tasks |
-| Doctor | Assigned live queue, identity-safe dossier, start consultation, encrypted local draft recovery, catalogue diagnoses/medicines, hospital draft save, sign/complete, assigned-doctor amendments with a reason, follow-up slots, lab orders/review |
+| Doctor | Assigned live queue, historical patient-record search, identity-safe dossier, start consultation, encrypted local draft recovery, catalogue diagnoses/medicines, hospital draft save, sign/complete, assigned-doctor amendments with a reason, follow-up slots, lab orders/review |
 | Nurse | Live queue, start triage, validated measured vitals, priority, handoff, care-plan/trend/record visibility, specimen collection/processing and explicitly verified/released results |
 | Care management | Doctor plan/task creation, prescription-linked medication tasks, daily, selected-weekday, every-N-days and once-only schedules, response windows/reminders, task replacement/stopping with reason, effective date and reviewed plan/task revision checks; doctor/nurse review acknowledgement |
 | Admin | Operational metrics, patient search/registration, booking/check-in, weekly doctor schedules, staff creation/access control and audit trail |

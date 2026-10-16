@@ -26,14 +26,14 @@ import com.example.di.AppContainer
     var menu by remember { mutableStateOf(false) }; var patientPage by remember { mutableStateOf("Visit") }
     var patientOpen by remember { mutableStateOf(false) }
     val destinations = if (user.mustChangePassword) listOf("Profile") else if (user.role == Role.ADMIN) listOf("Overview", "Appointments", "Patients", "Doctor schedules", "Staff", "Audit trail", "Notifications", "Profile")
-        else listOf("Live queue", "Appointments", "Lab workflow", "Notifications", "Profile")
+        else listOf("Live queue", "Patient records", "Appointments", "Lab workflow", "Notifications", "Profile")
     BackHandler(patientOpen) { patientOpen = false }
     Scaffold(topBar = { TopAppBar(title = { Text("Chettinad Care Staff", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) },
         navigationIcon = { IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.Menu, "Open navigation") } },
         actions = { TextButton(onClick = vm::refresh, enabled = !state.loading && !state.busy) { Text("Refresh") } }) }) { padding ->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (patientOpen) {
-                TextButton(onClick = { patientOpen = false }, enabled = !state.busy) { Text("Back to live queue") }
+                TextButton(onClick = { patientOpen = false }, enabled = !state.busy) { Text(if (tab == "Live queue") "Back to live queue" else "Back to ${tab.lowercase()}") }
                 PageHeading(state.record?.patient?.name ?: state.encounter?.patient_name ?: "Patient", "${state.record?.patient?.mrn ?: state.encounter?.mrn.orEmpty()} · Visit ${state.encounter?.token.orEmpty()}")
                 ChoiceRow(listOf("Visit", "Records", "Care plan", "Trends"), patientPage, { if (!state.busy) patientPage = it })
                 when (patientPage) {
@@ -53,6 +53,9 @@ import com.example.di.AppContainer
                         Button(onClick = { vm.loadPatient(entry.patient_id, entry); patientOpen = true; patientPage = "Visit" }, enabled = !state.busy) { Text("Open visit") }
                     } }
                 }
+                "Patient records" -> PatientRecordsSearch(vm, state) { patient ->
+                    vm.loadPatient(patient.id); patientOpen = true; patientPage = "Records"
+                }
                 "Appointments" -> AppointmentPage(vm, state, staff = true)
                 "Lab workflow" -> { PageHeading("Lab workflow", "Collection, verified results and clinical review."); ErrorCards(state, setOf("labs"), vm::refresh); LabList(vm, state, state.labs, patient = false) }
                 "Overview" -> AdminOverview(vm, state)
@@ -69,6 +72,24 @@ import com.example.di.AppContainer
         Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(user.name, style = MaterialTheme.typography.titleLarge)
             destinations.forEach { destination -> TextButton(onClick = { if (!state.busy) { tab = destination; patientOpen = false; menu = false } }, modifier = Modifier.fillMaxWidth()) { Text(destination) } }
+        }
+    }
+}
+
+@Composable internal fun PatientRecordsSearch(vm: PortalViewModel, state: PortalState, onOpen: (PatientProfile) -> Unit) {
+    var query by remember { mutableStateOf("") }
+    var searched by remember { mutableStateOf<String?>(null) }
+    PageHeading("Patient records", "Find past visits and shared care records by name or MRN. Hospital access rules apply.")
+    ErrorCards(state, setOf("patients"), vm::refresh)
+    Field("Patient name or MRN", query, { query = it }, !state.busy)
+    Button(onClick = { searched = query; vm.searchPatients(query.trim()) }, enabled = !state.busy && query.trim().length in 2..200) { Text("Search records") }
+    if (searched == query && state.patientSearchQuery == query.trim()) {
+        if (state.patientSearchLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
+        else if (state.patients.isEmpty() && "patients" !in state.errors) EmptyCard("No matching patients", "Check the patient name or MRN and search again.")
+        PagedRows(state.patients) { patient ->
+            InfoCard(patient.name, patient.mrn) {
+                Button(onClick = { onOpen(patient) }, enabled = !state.busy) { Text("Open records") }
+            }
         }
     }
 }

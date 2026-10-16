@@ -27,7 +27,7 @@ data class PortalState(
     val staff: List<StaffMember> = emptyList(), val dashboard: Map<String, Any?> = emptyMap(),
     val audit: List<AuditRow> = emptyList(), val sessions: List<DeviceSession> = emptyList(),
     val catalogues: PortalCatalogues = PortalCatalogues(), val labs: List<Lab> = emptyList(),
-    val patients: List<PatientProfile> = emptyList(), val noteVersion: Int = 0,
+    val patients: List<PatientProfile> = emptyList(), val patientSearchQuery: String? = null, val patientSearchLoading: Boolean = false, val noteVersion: Int = 0,
     val draft: ConsultationData = ConsultationData(), val draftAvailable: Boolean = false,
     val draftDirty: Boolean = false, val draftConflict: Boolean = false,
     val reviewedPatientVersion: Int? = null, val amendingNoteId: String? = null, val amendingEncounterId: String? = null,
@@ -231,8 +231,11 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
     }
     fun searchPatients(query: String) {
         patientSearch?.cancel()
-        _state.update { it.copy(patients = emptyList()) }
-        patientSearch = viewModelScope.launch { read("patients", { api.patients(query) }) { s,v -> s.copy(patients = v) } }
+        _state.update { it.copy(patients = emptyList(), patientSearchQuery = query, patientSearchLoading = true) }
+        patientSearch = viewModelScope.launch {
+            try { read("patients", { api.patients(query) }) { s,v -> s.copy(patients = v) } }
+            finally { if (currentCoroutineContext().isActive) _state.update { it.copy(patientSearchLoading = false) } }
+        }
     }
     fun updateDraft(data: ConsultationData) {
         val key = draftStorageKey(_state.value) ?: return
