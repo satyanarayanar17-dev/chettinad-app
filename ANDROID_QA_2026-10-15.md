@@ -1,3 +1,5 @@
+> Historical snapshot. See [ANDROID_IOS_PARITY.md](ANDROID_IOS_PARITY.md) and the current PR workflow results for the 16 October integration recheck.
+
 # Android verification — 15 October 2026
 
 The source audit covers the active native Patient and Staff portals against iOS revision `649d9f5fa2fe1eaac354e7670871bb677d3bb240` and backend revision `cd3256223d32527a249e6c4b02b434b04035bcb0`. Workflow coverage is not a claim of identical screens or production acceptance.

@@ -232,7 +232,15 @@ internal data class CareTaskReview(val planId: String?, val planVersion: Int?, v
 }
 
 internal fun taskEffectiveDate(task: CareTask?): String = task?.let {
-    runCatching { maxOf(todayIndia(), java.time.LocalDate.parse(it.start_date).plusDays(1).toString()) }.getOrNull()
+    runCatching {
+        require(validDate(it.start_date))
+        val zone = java.util.TimeZone.getTimeZone("Asia/Kolkata")
+        val format = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).apply { timeZone = zone; isLenient = false }
+        val day = java.util.Calendar.getInstance(zone, java.util.Locale.US).apply {
+            time = requireNotNull(format.parse(it.start_date)); add(java.util.Calendar.DAY_OF_MONTH, 1)
+        }
+        maxOf(todayIndia(), format.format(day.time))
+    }.getOrNull()
 } ?: todayIndia()
 
 internal data class CareSchedule(

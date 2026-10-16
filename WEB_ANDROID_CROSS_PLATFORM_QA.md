@@ -1,3 +1,5 @@
+> Historical snapshot. See [ANDROID_IOS_PARITY.md](ANDROID_IOS_PARITY.md) and the current PR workflow results for the 16 October integration recheck.
+
 # Chettinad Care Web/Android Cross-Platform QA Matrix
 
 | Workflow | Android → Backend | Visible on Web | Web → Backend | Visible on Android | Result |

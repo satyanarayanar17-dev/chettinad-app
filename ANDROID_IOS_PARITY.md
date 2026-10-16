@@ -1,10 +1,10 @@
 # Chettinad Care Android / iOS parity
 
-Work started 15 October 2026. This file supersedes the earlier Android gap matrices and integration reports for the Android source on this branch.
+Updated 16 October 2026. Work started 15 October 2026. This file supersedes the earlier Android gap matrices and integration reports for the Android source on this branch.
 
 ## Source of truth
 
-- iOS reference: `satyanarayanar17-dev/Chettinsd-care-IOS`, master at `649d9f5fa2fe1eaac354e7670871bb677d3bb240`, inspected locally.
+- iOS reference: `satyanarayanar17-dev/Chettinsd-care-IOS`, review branch `fix/shared-client-integration`. This includes the newer controlled pilot workflows at `61a13ee3b6b3a3b4eb564c1f7fe512eaa54febde` and the shared-client fixes. Both patient and staff schemes are verified by `.github/workflows/shared-client-ios.yml`.
 - Shared backend: `satyanarayanar17-dev/CHINAD123`, deployment revision `cd3256223d32527a249e6c4b02b434b04035bcb0`.
 - Android: existing `app-patient`, `app-staff` and `core` modules, Kotlin and Jetpack Compose.
 
@@ -23,9 +23,9 @@ Work started 15 October 2026. This file supersedes the earlier Android gap matri
 | Measurements | Patient-reported glucose, blood pressure, weight, temperature, pulse, SpO2 and activities |
 | Trends | Recorded values, charts, activity history and medication/insulin adherence history |
 | Reminders | Opt-in Android notifications with generic private text; inexact alarms for today's loaded upcoming tasks |
-| Doctor | Assigned live queue, identity-safe dossier, start consultation, encrypted local draft recovery, catalogue diagnoses/medicines, hospital draft save, sign/complete, follow-up slots, lab orders/review |
+| Doctor | Assigned live queue, identity-safe dossier, start consultation, encrypted local draft recovery, catalogue diagnoses/medicines, hospital draft save, sign/complete, assigned-doctor amendments with a reason, follow-up slots, lab orders/review |
 | Nurse | Live queue, start triage, validated measured vitals, priority, handoff, care-plan/trend/record visibility, specimen collection/processing and explicitly verified/released results |
-| Care management | Doctor plan/task creation, prescription-linked medication tasks, task replacement/stopping with reason, effective date and revision checks; doctor/nurse review acknowledgement |
+| Care management | Doctor plan/task creation, prescription-linked medication tasks, daily, selected-weekday, every-N-days and once-only schedules, response windows/reminders, task replacement/stopping with reason, effective date and reviewed plan/task revision checks; doctor/nurse review acknowledgement |
 | Admin | Operational metrics, patient search/registration, booking/check-in, weekly doctor schedules, staff creation/access control and audit trail |
 | Sessions | Encrypted persistent tokens/user/cookies, single-flight refresh, bounded retries, logout, device revocation, staff password change |
 
@@ -56,21 +56,14 @@ gradle :app-patient:assembleDemoDebug :app-staff:assembleDemoDebug
 
 ## Verification status
 
-Final test suite (the workflow results on PR #1 record pass/fail status):
+Current checks are published on [Android PR #1](https://github.com/satyanarayanar17-dev/chettinad-app/pull/1) and [iOS PR #2](https://github.com/satyanarayanar17-dev/Chettinsd-care-IOS/pull/2). Read the workflow results and artifact metadata for the exact tested commit and counts. Historical reports dated 15 October describe earlier snapshots.
 
-| Suite | Tests |
-| --- | ---: |
-| Core contracts, state and native UI | 38 |
-| Patient | 7 |
-| Staff | 6 |
-| Total | 51 |
+The Android workflow builds both APKs, runs unit/contract/Compose/state tests, connects the real Kotlin API clients to a disposable synthetic backend, checks lint, runs native Keystore/session/cookie tests and installs/launches both apps on Android 35. The real HTTP journey covers a second client's saved-note and amendment visibility, signed identity, profile changes, recurring care tasks and patient responses, plus stale-write and role/ownership rejection. Native UI tests include an open care form becoming stale after a second app updates the plan.
 
-Both APKs and the instrumentation test APK build successfully. Both application signatures verify with `apksigner`; package IDs are distinct, minSdk 24 and targetSdk 36. Rendered Patient Home and Staff Queue screens were inspected and the bottom-navigation labels corrected for compact widths.
+The same workflow builds the web frontend and runs six Chromium clinical journeys against the same pinned API source. The iOS workflow runs both patient and staff schemes on an iPhone Simulator, including actual nurse/doctor view-model handoff, draft recovery, signing, PDF pagination, session refresh isolation and delayed-search regressions. It uses disposable SQLite fixtures. Opt-in live-account checks and UI targets that point at the public demo are excluded from automatic execution.
 
-The backend's patient portal/document, care-plan and authentication/session suites pass against isolated synthetic SQLite databases. The additional OTP suite passes 16 tests, including the production route with simulated external SMS transport. None of these tests sent real SMS or changed the deployed database.
+Live read-only verification on 16 October returned HTTP 200 for the development web app and API health endpoint after an initial API timeout. The API reports the pinned backend revision, 18/18 migrations, healthy database and clean integrity checks. The web bundle references the same API URL as the native demo configurations, and its exact-origin CORS preflight returned HTTP 204. This is a development SQLite deployment. No deployed clinical data was changed and no real SMS was sent.
 
-Android Keystore persistence passed both native tests on an Android 35 emulator in CI. The initial launcher run installed both apps and captured both login screens, but its staff assertion used `Password / PIN` instead of the actual `Password / Secure PIN` label. The corrected check requires each app's own package, title, input label and sign-in action, verifies launch status/process presence and both installed package IDs, and captures screenshots/logs on failure. Replaying the recovered screen dumps confirms it accepts the correct screens and rejects a wrong screen, a missing package and a failed launch. The full emulator rerun status is recorded on PR #1; physical-handset acceptance and Google Play release signing remain separate from debug APK builds.
-
-The iOS-configured server health check reported a development SQLite fixture, not a production PostgreSQL deployment. The Android code does not change that deployment. Real-patient acceptance still needs production configuration/SMS delivery plus physical-device workflow checks.
+These checks do not certify production PostgreSQL persistence, real SMS delivery, release signing/distribution, physical-phone file picking/printing/notifications, accessibility/font scaling, or identical iOS/Android screen layouts. Android also does not expose every backend administration endpoint. Complete hospital acceptance remains a device-level activity.
 
 Reminder limitations match an app-refreshed daily model: notification permission is opt-in; alarms are inexact, only cover loaded upcoming tasks and are refreshed on app use. Reopening after a reboot refreshes them. No continuous background sync is claimed.
