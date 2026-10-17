@@ -1,6 +1,6 @@
 # Chettinad Care Android / iOS parity
 
-Updated 16 October 2026. Work started 15 October 2026. This file supersedes the earlier Android gap matrices and integration reports for the Android source on this branch.
+Updated 17 October 2026. Work started 15 October 2026. This file supersedes the earlier Android gap matrices and integration reports for the Android source on this branch.
 
 ## Source of truth
 
@@ -13,15 +13,16 @@ Updated 16 October 2026. Work started 15 October 2026. This file supersedes the 
 | Area | Android implementation |
 | --- | --- |
 | Brand and navigation | Official iOS logo/icon, navy `#000666`, white cards, Home/Care plan/Appointments/Records plus Queue/Trends/Notifications/Profile |
-| Patient access | Indian mobile OTP, challenge ID, expiry, resend cooldown, new-patient registration, session patient ID |
+| Patient access | Indian mobile OTP, challenge ID, expiry, resend cooldown, new-patient registration, native birthday calendar, session patient ID |
+| Address forms | State/UT menu, six-digit PIN/state matching, postal-district hint and editable city/locality; shared signup, profile and reception fields |
 | Home | Next appointment, care-task progress and record shortcuts |
 | Appointments | Directory, available slots, request, versioned cancellation/rescheduling, hospital confirmation state |
 | Queue | Real token, status, patients ahead and estimated wait when the server returns them |
 | Records | Signed prescriptions and printing/PDF, clinical notes, released lab results, private documents |
 | Documents | PDF/JPEG/PNG upload with 10 MB limit, metadata, authenticated opening and appointment attachment/detachment |
-| Care plan | Today's tasks, due-only patient responses, measurement/activity/medication/insulin status, optimistic versions, conflict reload |
+| Care plan | Today's tasks, patient measurement/activity entry, due-only patient responses, medication/insulin status, optimistic versions, conflict reload |
 | Measurements | Patient-reported glucose, blood pressure, weight, temperature, pulse, SpO2 and activities |
-| Trends | Recorded values, charts, activity history and medication/insulin adherence history |
+| Trends | Recorded values, charts, activity history and medication/insulin adherence history; entry is on Care plan |
 | Reminders | Opt-in Android notifications with generic private text; inexact alarms for today's loaded upcoming tasks |
 | Doctor | Assigned live queue, historical patient-record search, identity-safe dossier, start consultation, encrypted local draft recovery, catalogue diagnoses/medicines, hospital draft save, sign/complete, assigned-doctor amendments with a reason, follow-up slots, lab orders/review |
 | Nurse | Live queue, start triage, validated measured vitals, priority, handoff, care-plan/trend/record visibility, specimen collection/processing and explicitly verified/released results |
@@ -41,6 +42,8 @@ Appointment slots are bound to the doctor/date search that produced them, includ
 
 No clinical request bodies or credentials are written to HTTP logs. Backups are disabled. Refresh cookies retain secure, expiry, origin and path boundaries. Sessions and view-model stores are cleared when leaving authenticated UI. Production requires an HTTPS API URL ending in `/api/v1/`; cleartext is disabled.
 
+Address forms use the same bundled offline PIN directory as the iOS update: 36 states/UTs and 18,839 distinct PINs. Known PIN/state mismatches block submission. An unlisted PIN needs explicit confirmation, reset when the PIN or state changes. Postal districts are hints, not city replacements. Source attribution and the MIT license ship in `core/src/main/resources/india-postal-NOTICE.txt`. Android dates are explicitly selected with the native birthday calendar; future dates are disallowed.
+
 ## Build variants
 
 - `demo`: configured to the same development demonstration API currently referenced by iOS. Debug builds may display a backend-issued development OTP, explicitly labelled synthetic testing only. This does not bypass the backend.
@@ -55,6 +58,8 @@ gradle :app-patient:assembleDemoDebug :app-staff:assembleDemoDebug
 ```
 
 ## Verification status
+
+Local verification on 17 October for the address/calendar/Care plan update: all 77 tests passed (64 core, 7 patient, 6 staff), including the real-HTTP journey against a disposable synthetic backend and new dropdown, unknown-PIN confirmation, birthday and navigation tests. Both version 1.1 APKs built; both lint checks passed with zero errors (26 warnings per app). The iOS patient and staff simulator builds and Core test-product compilation passed; postal logic was also checked with a standalone Swift executable. The new iOS UI was not run in a simulator in this session.
 
 Current checks are published on [Android PR #1](https://github.com/satyanarayanar17-dev/chettinad-app/pull/1) and [iOS PR #2](https://github.com/satyanarayanar17-dev/Chettinsd-care-IOS/pull/2). Read the workflow results and artifact metadata for the exact tested commit and counts. Historical reports dated 15 October describe earlier snapshots.
 

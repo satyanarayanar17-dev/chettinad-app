@@ -13,7 +13,8 @@ import com.example.domain.model.Role
     var value by remember { mutableStateOf("") }; var note by remember { mutableStateOf("") }
     var editing by remember { mutableStateOf(false) }
     PageHeading(if (patient) "Today's care plan" else "Patient care plan", "Instructions from the care team. Times are in India Standard Time.")
-    ErrorCards(state, setOf("care plan", "today", "timeline"), vm::refresh)
+    ErrorCards(state, setOf("care plan", "today", "timeline", "measurements"), vm::refresh)
+    if (patient) MeasurementEntrySection(vm, state)
     if (state.today.isEmpty() && "today" !in state.errors) EmptyCard("No tasks for today", "Tasks assigned by your care team will appear here.")
     state.today.forEach { task ->
         InfoCard(task.title, "${task.due_time} · ${label(task.task_type)}") {
@@ -134,12 +135,10 @@ import com.example.domain.model.Role
     }
 }
 
-@Composable fun TrendsPage(vm: PortalViewModel, state: PortalState, canRecord: Boolean) {
-    var recordType by remember { mutableStateOf("GLUCOSE") }; var adding by remember { mutableStateOf(false) }
+@Composable fun TrendsPage(vm: PortalViewModel, state: PortalState) {
+    var recordType by remember { mutableStateOf("GLUCOSE") }
     PageHeading("Health trends", "Measurements, activity and care responses shared with the care team.")
     ErrorCards(state, setOf("timeline", "measurements"), vm::refresh)
-    if (canRecord) OutlinedButton(onClick = { adding = !adding }, enabled = !state.busy) { Text(if (adding) "Close entry" else "Log measurement or activity") }
-    if (adding) SelfRecordForm(vm, state)
     ChoiceRow(listOf("GLUCOSE", "BLOOD_PRESSURE", "WEIGHT", "TEMPERATURE", "PULSE", "SPO2", "ACTIVITY", "MEDICATION", "INSULIN"), recordType, { recordType = it })
     val records = state.selfRecords.filter { it.record_type == recordType }.sortedByDescending { it.observed_at }
     if (recordType !in listOf("ACTIVITY", "MEDICATION", "INSULIN")) {
@@ -181,6 +180,14 @@ internal fun trendSeries(type: String, records: List<SelfRecord>, timeline: List
     return points.groupBy { it.first }.map { (key, rows) ->
         TrendSeries(key.first, key.second, rows.sortedBy { it.second }.takeLast(30).map { it.second to it.third })
     }
+}
+
+@Composable private fun MeasurementEntrySection(vm: PortalViewModel, state: PortalState) {
+    var adding by remember { mutableStateOf(false) }
+    OutlinedButton(onClick = { adding = !adding }, enabled = !state.busy) {
+        Text(if (adding) "Close entry" else "Log measurement or activity")
+    }
+    if (adding) SelfRecordForm(vm, state)
 }
 
 @Composable private fun SelfRecordForm(vm: PortalViewModel, state: PortalState) {

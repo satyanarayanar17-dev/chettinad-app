@@ -53,14 +53,14 @@ import androidx.compose.ui.platform.LocalContext
                     }
                     InfoCard("Your health records", "Prescriptions, results and documents in one place.") {
                         TextButton(onClick = { tab = "Records" }) { Text("Open records") }
-                        TextButton(onClick = { tab = "Trends" }) { Text("Log a measurement or activity") }
+                        TextButton(onClick = { tab = "Care plan" }) { Text("Log a measurement or activity") }
                     }
                 }
                 "Appointments" -> AppointmentPage(vm, state)
                 "Care plan" -> CarePlanPage(vm, state, patient = true)
                 "Queue" -> QueuePatientPage(state, vm::refresh)
                 "Records" -> RecordsPage(vm, state, uploadAllowed = true)
-                "Trends" -> TrendsPage(vm, state, canRecord = true)
+                "Trends" -> TrendsPage(vm, state)
                 "Profile" -> ProfilePage(vm, state, onLogout)
                 "Notifications" -> NotificationsPage(vm, state)
             }

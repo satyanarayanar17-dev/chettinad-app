@@ -1,0 +1,35 @@
+INDIA POSTAL DIRECTORY SNAPSHOT
+
+Source: https://github.com/bilal-webdev/india-postal-pincode-dataset
+Source revision: 105d24c80867c8a7121c140add8792165d0b7df5
+Downloaded: 2026-10-17
+Source file: csv/india-postal-lgd-mapping.csv
+Rows: 20144; distinct PIN/state/district rows: 20144
+Converted to tab-separated PIN, canonical state/UT, postal district.
+State spelling and merged UT naming normalized; cities are not inferred from districts.
+Reference postal directory: https://www.data.gov.in/catalog/all-india-pincode-directory-through-webservice
+The government download was unavailable/incomplete during this build; the licensed
+complete mirror above supplies this offline snapshot. It is not a live verification service.
+Unlisted PIN codes require explicit user confirmation rather than being rejected as invalid.
+
+# MIT License
+
+Copyright (c) 2026 Bilal Shaikh
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

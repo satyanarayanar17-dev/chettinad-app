@@ -40,7 +40,7 @@ import com.example.di.AppContainer
                     "Visit" -> if (user.role == Role.NURSE) TriagePage(vm, state) else ConsultationPage(vm, state)
                     "Records" -> RecordsPage(vm, state, uploadAllowed = false, onAmend = { patientPage = "Visit" })
                     "Care plan" -> CarePlanPage(vm, state, patient = false)
-                    "Trends" -> TrendsPage(vm, state, canRecord = false)
+                    "Trends" -> TrendsPage(vm, state)
                 }
             } else when (tab) {
                 "Live queue" -> {

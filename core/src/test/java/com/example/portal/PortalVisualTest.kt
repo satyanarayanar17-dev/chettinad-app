@@ -5,6 +5,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.example.ui.theme.AppTheme
 import com.example.data.api.*
 import com.example.di.AppContainer
@@ -69,4 +70,28 @@ class PortalVisualTest {
         compose.onNodeWithText("Live queue").assertIsDisplayed()
         compose.onRoot().captureRoboImage("build/qa/staff-queue.png")
     }
+    @Test fun measurementEntryLivesInCarePlanAndTrendsIsHistoryOnly() {
+        val api = mockk<PortalApi>(relaxed = true)
+        coEvery { api.appointments(any(), any()) } returns emptyList()
+        coEvery { api.directory() } returns Directory()
+        coEvery { api.carePlan(any()) } returns CarePlanBundle()
+        coEvery { api.today(any()) } returns emptyList()
+        coEvery { api.record(any()) } returns ClinicalBundle(PatientProfile("patient-1", "MRN-1", "Synthetic", "+919100000001", "1990-01-01", "Female"))
+        val container = mockk<AppContainer>()
+        every { container.portalApi } returns api
+        every { container.tokenManager } returns TokenManager()
+        compose.setContent { AppTheme { PatientPortal(container, User("patient-1", "Synthetic", Role.PATIENT)) {} } }
+        compose.waitForIdle()
+        compose.onNodeWithText("Log a measurement or activity").performScrollTo().performClick()
+        compose.onNodeWithText("Log measurement or activity").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Add your record").assertIsDisplayed()
+        compose.onRoot().captureRoboImage("build/qa/patient-care-plan-entry.png")
+        compose.onNodeWithText("More").performClick()
+        compose.onNodeWithText("Trends").performClick()
+        compose.onNodeWithText("Health trends").assertIsDisplayed()
+        compose.onNodeWithText("Log measurement or activity").assertDoesNotExist()
+        compose.onNodeWithText("Add your record").assertDoesNotExist()
+        compose.onRoot().captureRoboImage("build/qa/patient-trends-history.png")
+    }
+
 }
