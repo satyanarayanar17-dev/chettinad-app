@@ -62,8 +62,10 @@ class PortalStateTest {
         coEvery { api.slots("doctor-a", "2026-10-16") } coAnswers { delay(1000); listOf(old) }
         coEvery { api.slots("doctor-b", "2026-10-17") } returns listOf(current)
         vm.slots("doctor-a", "2026-10-16"); runCurrent()
+        assertTrue(vm.state.value.slotsLoading)
         vm.slots("doctor-b", "2026-10-17"); advanceUntilIdle()
         val state = vm.state.value
+        assertFalse(state.slotsLoading)
         assertEquals(listOf(current), state.availableSlots("doctor-b", "2026-10-17"))
         assertTrue(state.availableSlots("doctor-a", "2026-10-16").isEmpty())
     }

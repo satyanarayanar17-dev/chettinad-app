@@ -6,6 +6,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
 import com.example.ui.theme.AppTheme
 import com.example.data.api.*
 import com.example.di.AppContainer
@@ -67,7 +70,7 @@ class PortalVisualTest {
         every { container.tokenManager } returns TokenManager()
         compose.setContent { AppTheme(darkTheme = false) { StaffPortal(container, User("doctor-1", "Dr. Priya", Role.DOCTOR, "Obstetrics & Gynaecology")) {} } }
         compose.waitForIdle()
-        compose.onNodeWithText("Live queue").assertIsDisplayed()
+        compose.onNode(hasText("Live queue") and !hasAnyAncestor(hasTestTag("staff-menu"))).assertIsDisplayed()
         compose.onRoot().captureRoboImage("build/qa/staff-queue.png")
     }
     @Test fun measurementEntryLivesInCarePlanAndTrendsIsHistoryOnly() {

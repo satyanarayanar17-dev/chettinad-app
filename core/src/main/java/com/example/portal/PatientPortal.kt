@@ -82,8 +82,12 @@ import androidx.compose.ui.platform.LocalContext
     var checkIn by remember { mutableStateOf<Appointment?>(null) }
     PageHeading("Appointments", if (staff) "Requests, arrivals and upcoming visits." else "Plan your next visit with the care team.")
     ErrorCards(state, setOf("appointments", "directory", "slots"), vm::refresh)
-    if (!staff || vm.user.role == com.example.domain.model.Role.ADMIN) OutlinedButton(onClick = { booking = !booking }, enabled = !state.busy) { Text(if (booking) "Close booking" else "Book an appointment") }
-    if (booking) BookingForm(vm, state, staff)
+    if (!staff || vm.user.role == com.example.domain.model.Role.ADMIN) Button(onClick = { vm.clearMessage(); booking = true }, enabled = !state.busy) {
+        Icon(Icons.Outlined.Add, contentDescription = null)
+        Spacer(Modifier.width(8.dp))
+        Text("Book an appointment")
+    }
+    if (booking) AppointmentBooking(vm, state, staff, onClose = { booking = false })
     if (state.appointments.isEmpty() && "appointments" !in state.errors) EmptyCard("No appointments yet", "Your booked visits will appear here.")
     PagedRows(state.appointments.sortedByDescending { it.scheduled_at }) { appointment ->
         InfoCard(if (staff) appointment.patient_name ?: "Patient" else appointment.doctor_name ?: "Care team", displayDate(appointment.scheduled_at)) {
@@ -99,28 +103,6 @@ import androidx.compose.ui.platform.LocalContext
     }
     checkIn?.let { appointment -> ConfirmAction("Verify patient identity", "Confirm this patient’s name and hospital identity against the appointment before checking in: ${appointment.patient_name.orEmpty()} · ${appointment.mrn.orEmpty()}.", "Identity verified · Check in", { checkIn = null }, { vm.appointment(appointment, "check-in"); checkIn = null }) }
     cancel?.let { appointment -> ConfirmAction("Cancel this appointment?", "${appointment.doctor_name.orEmpty()} · ${displayDate(appointment.scheduled_at)}", "Cancel appointment", { cancel = null }) { vm.appointment(appointment, "cancel"); cancel = null } }
-}
-
-@Composable private fun BookingForm(vm: PortalViewModel, state: PortalState, staff: Boolean) {
-    var doctor by remember { mutableStateOf("") }; var date by remember { mutableStateOf(todayIndia()) }
-    var slot by remember(doctor, date) { mutableStateOf("") }; var reason by remember { mutableStateOf("") }
-    val offeredSlots = state.availableSlots(doctor, date)
-    var patient by remember { mutableStateOf("") }; var search by remember { mutableStateOf("") }
-    LaunchedEffect(state.message) { if (state.message == "Appointment request sent") { reason = ""; slot = "" } }
-    InfoCard("New appointment", "Select an available slot. Requests need hospital confirmation.") {
-        if (staff) {
-            Field("Search patient by name or MRN", search, { search = it }, !state.busy)
-            OutlinedButton(onClick = { vm.searchPatients(search) }, enabled = search.isNotBlank() && !state.busy) { Text("Find patient") }
-            state.patients.forEach { p -> FilterChip(selected = patient == p.id, onClick = { patient = p.id }, label = { Text("${p.name} · ${p.mrn}") }) }
-        }
-        state.directory.doctors.forEach { d -> FilterChip(selected = doctor == d.id, onClick = { doctor = d.id }, enabled = !state.busy, label = { Text("${d.name} · ${d.department.orEmpty()}") }) }
-        Field("Visit date (YYYY-MM-DD)", date, { date = it }, !state.busy)
-        Button(onClick = { vm.slots(doctor, date) }, enabled = doctor.isNotBlank() && validDate(date) && !state.busy) { Text("Find available times") }
-        offeredSlots.forEach { offered -> FilterChip(selected = slot == offered.scheduled_at, onClick = { slot = offered.scheduled_at }, enabled = !state.busy, label = { Text("${displayDate(offered.scheduled_at)} · ${offered.room}") }) }
-        if (offeredSlots.isEmpty()) Text("Find times to see the available slots.", style = MaterialTheme.typography.bodySmall)
-        Field("Reason for visit", reason, { reason = it }, !state.busy, 2)
-        Button(onClick = { vm.book(doctor, slot, reason, patient.takeIf { staff }) }, enabled = !state.busy && slot.isNotBlank() && reason.isNotBlank() && (!staff || patient.isNotBlank())) { Text("Request appointment") }
-    }
 }
 
 @Composable private fun RescheduleForm(vm: PortalViewModel, state: PortalState, appointment: Appointment) {

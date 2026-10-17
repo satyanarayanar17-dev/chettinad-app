@@ -12,11 +12,11 @@ Updated 17 October 2026. Work started 15 October 2026. This file supersedes the 
 
 | Area | Android implementation |
 | --- | --- |
-| Brand and navigation | Official iOS logo/icon, navy `#000666`, white cards, Home/Care plan/Appointments/Records plus Queue/Trends/Notifications/Profile |
+| Brand and navigation | Official iOS logo/icon, navy `#000666`, white cards, patient bottom navigation and grouped staff side navigation with a compact header |
 | Patient access | Indian mobile OTP, challenge ID, expiry, resend cooldown, new-patient registration, native birthday calendar, session patient ID |
 | Address forms | State/UT menu, six-digit PIN/state matching, postal-district hint and editable city/locality; shared signup, profile and reception fields |
 | Home | Next appointment, care-task progress and record shortcuts |
-| Appointments | Directory, available slots, request, versioned cancellation/rescheduling, hospital confirmation state |
+| Appointments | Dedicated booking screen with patient/visit/review steps for staff and visit/review for patients, doctor/time menus, visit-date calendar, available slots, request, versioned cancellation/rescheduling and hospital confirmation state |
 | Queue | Real token, status, patients ahead and estimated wait when the server returns them |
 | Records | Signed prescriptions and printing/PDF, clinical notes, released lab results, private documents |
 | Documents | PDF/JPEG/PNG upload with 10 MB limit, metadata, authenticated opening and appointment attachment/detachment |
@@ -37,6 +37,8 @@ Patient, account and encounter IDs are distinct throughout the active native flo
 Backend authorization is authoritative. The current deployed backend allows appointment confirmation/check-in for Admin/Doctor; Nurse sees requests but is not offered those actions. This differs from older iOS audit claims and does not weaken server roles.
 
 All writes are explicit and single flight. Version conflicts are surfaced rather than silently overwriting records. Clinical notes are saved locally using app-private encrypted preferences scoped to staff account and encounter, then explicitly saved or signed against the hospital's note version. Local draft recovery is offered after reloading a visit. Recovery copies retain the reviewed patient/note versions, so reopening an older draft after a web/iOS edit cannot silently adopt newer signing versions. Legacy recovery copies require explicit hospital-draft review.
+
+Booking uses a dedicated screen with a fixed bottom action and one step at a time. Patient name/MRN and full visit details are reviewed before sending. Changing patient clears the old visit reason; changing doctor/date clears the selected slot. Staff navigation groups reception, administration and account pages in a left-aligned drawer. Changing staff pages returns the content to the top.
 
 Appointment slots are bound to the doctor/date search that produced them, including across booking and rescheduling forms. Cancelled older searches cannot replace a newer result. Home care-plan progress counts recorded measurements, taken medication/insulin and completed activities; due, missed and skipped tasks do not count as completed. The staff login respects Android system-bar safe areas.
 
@@ -59,7 +61,9 @@ gradle :app-patient:assembleDemoDebug :app-staff:assembleDemoDebug
 
 ## Verification status
 
-Local verification on 17 October for the address/calendar/Care plan update: all 77 tests passed (64 core, 7 patient, 6 staff), including the real-HTTP journey against a disposable synthetic backend and new dropdown, unknown-PIN confirmation, birthday and navigation tests. Both version 1.1 APKs built; both lint checks passed with zero errors (26 warnings per app). The iOS patient and staff simulator builds and Core test-product compilation passed; postal logic was also checked with a standalone Swift executable. The new iOS UI was not run in a simulator in this session.
+Local verification on 17 October for the address/calendar/Care plan and mobile-layout updates: all 82 tests passed (69 core, 7 patient, 6 staff), including the real-HTTP journey against a disposable synthetic backend, dropdown/birthday checks, guided patient/staff booking, request identity, changed-doctor slot reset and changing-patient reason reset. UI layout checks use 360 × 800 dp, including larger system text at 1.3×. Both version 1.2 APKs built; both lint checks passed with zero errors (26 warnings per app). These local installers retain the signing key used by the supplied v1.1 APKs.
+
+The previous iOS address-form update passed both patient/staff simulator builds and Core test-product compilation; postal logic also passed standalone Swift checks. The new iOS UI was not run in a simulator in this session. The subsequent layout changes target Android.
 
 Current checks are published on [Android PR #1](https://github.com/satyanarayanar17-dev/chettinad-app/pull/1) and [iOS PR #2](https://github.com/satyanarayanar17-dev/Chettinsd-care-IOS/pull/2). Read the workflow results and artifact metadata for the exact tested commit and counts. Historical reports dated 15 October describe earlier snapshots.
 
