@@ -20,6 +20,7 @@ data class PortalState(
     val appointments: List<Appointment> = emptyList(), val queue: List<QueuePatient> = emptyList(),
     val directory: Directory = Directory(), val slots: List<Slot> = emptyList(),
     val slotsDoctorId: String? = null, val slotsDate: String? = null,
+    val slotsLoading: Boolean = false,
     val record: ClinicalBundle? = null, val patientId: String? = null, val encounter: QueuePatient? = null,
     val care: CarePlanBundle = CarePlanBundle(), val today: List<CareOccurrence> = emptyList(),
     val timeline: List<AdherenceEntry> = emptyList(), val selfRecords: List<SelfRecord> = emptyList(),
@@ -175,8 +176,11 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
     }
 
     fun slots(doctor: String, date: String) {
-        slotsLoad?.cancel(); _state.update { it.copy(slots = emptyList(), slotsDoctorId = doctor, slotsDate = date) }
-        slotsLoad = viewModelScope.launch { read("slots", { api.slots(doctor, date) }) { s,v -> s.copy(slots = v) } }
+        slotsLoad?.cancel(); _state.update { it.copy(slots = emptyList(), slotsDoctorId = doctor, slotsDate = date, slotsLoading = true, errors = it.errors - "slots") }
+        slotsLoad = viewModelScope.launch {
+            try { read("slots", { api.slots(doctor, date) }) { s,v -> s.copy(slots = v) } }
+            finally { if (currentCoroutineContext().isActive) _state.update { it.copy(slotsLoading = false) } }
+        }
     }
     fun reloadStaff(staff: List<StaffMember>) { _state.update { it.copy(staff = staff) } }
     fun reloadDirectory(directory: Directory) { _state.update { it.copy(directory = directory) } }

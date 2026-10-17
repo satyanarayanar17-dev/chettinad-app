@@ -6,6 +6,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -16,6 +17,7 @@ import com.example.data.api.*
 import com.example.domain.model.User
 import com.example.domain.model.Role
 import com.example.di.AppContainer
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun StaffPortal(container: AppContainer, user: User, onLogout: () -> Unit) {
@@ -23,55 +25,64 @@ import com.example.di.AppContainer
     val state by vm.state.collectAsState()
     ForegroundPortalSync(vm)
     var tab by remember { mutableStateOf(if (user.mustChangePassword) "Profile" else if (user.role == Role.ADMIN) "Overview" else "Live queue") }
-    var menu by remember { mutableStateOf(false) }; var patientPage by remember { mutableStateOf("Visit") }
+    val drawer = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    val contentScroll = rememberScrollState()
+    var patientPage by remember { mutableStateOf("Visit") }
     var patientOpen by remember { mutableStateOf(false) }
     val destinations = if (user.mustChangePassword) listOf("Profile") else if (user.role == Role.ADMIN) listOf("Overview", "Appointments", "Patients", "Doctor schedules", "Staff", "Audit trail", "Notifications", "Profile")
         else listOf("Live queue", "Patient records", "Appointments", "Lab workflow", "Notifications", "Profile")
-    BackHandler(patientOpen) { patientOpen = false }
-    Scaffold(topBar = { TopAppBar(title = { Text("Chettinad Care Staff", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) },
-        navigationIcon = { IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.Menu, "Open navigation") } },
-        actions = { TextButton(onClick = vm::refresh, enabled = !state.loading && !state.busy) { Text("Refresh") } }) }) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            if (patientOpen) {
-                TextButton(onClick = { patientOpen = false }, enabled = !state.busy) { Text(if (tab == "Live queue") "Back to live queue" else "Back to ${tab.lowercase()}") }
-                PageHeading(state.record?.patient?.name ?: state.encounter?.patient_name ?: "Patient", "${state.record?.patient?.mrn ?: state.encounter?.mrn.orEmpty()} · Visit ${state.encounter?.token.orEmpty()}")
-                ChoiceRow(listOf("Visit", "Records", "Care plan", "Trends"), patientPage, { if (!state.busy) patientPage = it })
-                when (patientPage) {
-                    "Visit" -> if (user.role == Role.NURSE) TriagePage(vm, state) else ConsultationPage(vm, state)
-                    "Records" -> RecordsPage(vm, state, uploadAllowed = false, onAmend = { patientPage = "Visit" })
-                    "Care plan" -> CarePlanPage(vm, state, patient = false)
-                    "Trends" -> TrendsPage(vm, state)
-                }
-            } else when (tab) {
-                "Live queue" -> {
-                    PageHeading("Live queue", "${user.department.orEmpty()} · ${if (user.role == Role.NURSE) "Triage and handoff" else "Consultations"}")
-                    ErrorCards(state, setOf("queue"), vm::refresh)
-                    val queue = state.queue.filter { if (user.role == Role.NURSE) it.status in listOf("WAITING", "TRIAGE", "WAITING_DOCTOR") else it.status in listOf("WAITING_DOCTOR", "DOCTOR_READY", "CONSULTATION", "WAITING") }
-                    if (queue.isEmpty() && "queue" !in state.errors) EmptyCard("No patients waiting", "New arrivals will appear here after check-in.")
-                    PagedRows(queue) { entry -> InfoCard(entry.patient_name, "${entry.mrn} · Token ${entry.token.orEmpty()}") {
-                        StatusPill(entry.status); entry.wait_minutes?.let { Text("Waiting ${it.toInt()} minutes") }
-                        Button(onClick = { vm.loadPatient(entry.patient_id, entry); patientOpen = true; patientPage = "Visit" }, enabled = !state.busy) { Text("Open visit") }
-                    } }
-                }
-                "Patient records" -> PatientRecordsSearch(vm, state) { patient ->
-                    vm.loadPatient(patient.id); patientOpen = true; patientPage = "Records"
-                }
-                "Appointments" -> AppointmentPage(vm, state, staff = true)
-                "Lab workflow" -> { PageHeading("Lab workflow", "Collection, verified results and clinical review."); ErrorCards(state, setOf("labs"), vm::refresh); LabList(vm, state, state.labs, patient = false) }
-                "Overview" -> AdminOverview(vm, state)
-                "Staff" -> StaffAdministration(vm, state)
-                "Patients" -> PatientRegistration(vm, state)
-                "Doctor schedules" -> SchedulePage(vm, state)
-                "Audit trail" -> { PageHeading("Audit trail"); ErrorCards(state, setOf("audit"), vm::refresh); PagedRows(state.audit) { InfoCard(label(it.action.orEmpty()), displayDate(it.timestamp ?: it.created_at)) { Text("Actor: ${it.actor_id ?: it.user_id ?: "System"}") } } }
-                "Notifications" -> NotificationsPage(vm, state)
-                "Profile" -> ProfilePage(vm, state, onLogout)
-            }
+    BackHandler(patientOpen && drawer.isClosed) { patientOpen = false }
+    LaunchedEffect(tab, patientOpen, patientPage) { contentScroll.scrollTo(0) }
+    ModalNavigationDrawer(drawerState = drawer, gesturesEnabled = !state.busy, drawerContent = {
+        StaffNavigation(user, destinations, tab, !state.busy) { destination ->
+            tab = destination; patientOpen = false
+            scope.launch { drawer.close() }
         }
-    }
-    if (menu) ModalBottomSheet(onDismissRequest = { menu = false }) {
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(user.name, style = MaterialTheme.typography.titleLarge)
-            destinations.forEach { destination -> TextButton(onClick = { if (!state.busy) { tab = destination; patientOpen = false; menu = false } }, modifier = Modifier.fillMaxWidth()) { Text(destination) } }
+    }) {
+        Scaffold(topBar = { TopAppBar(title = {
+            Column {
+                Text("Chettinad Care", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                Text("Staff · ${label(user.role.name)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }, navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Icon(Icons.Outlined.Menu, "Open navigation") } },
+            actions = { IconButton(onClick = vm::refresh, enabled = !state.loading && !state.busy) { Icon(Icons.Outlined.Refresh, "Refresh") } }) }) { padding ->
+            Column(Modifier.padding(padding).fillMaxSize().verticalScroll(contentScroll).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (patientOpen) {
+                    TextButton(onClick = { patientOpen = false }, enabled = !state.busy) { Text(if (tab == "Live queue") "Back to live queue" else "Back to ${tab.lowercase()}") }
+                    PageHeading(state.record?.patient?.name ?: state.encounter?.patient_name ?: "Patient", "${state.record?.patient?.mrn ?: state.encounter?.mrn.orEmpty()} · Visit ${state.encounter?.token.orEmpty()}")
+                    ChoiceRow(listOf("Visit", "Records", "Care plan", "Trends"), patientPage, { if (!state.busy) patientPage = it })
+                    when (patientPage) {
+                        "Visit" -> if (user.role == Role.NURSE) TriagePage(vm, state) else ConsultationPage(vm, state)
+                        "Records" -> RecordsPage(vm, state, uploadAllowed = false, onAmend = { patientPage = "Visit" })
+                        "Care plan" -> CarePlanPage(vm, state, patient = false)
+                        "Trends" -> TrendsPage(vm, state)
+                    }
+                } else when (tab) {
+                    "Live queue" -> {
+                        PageHeading("Live queue", "${user.department.orEmpty()} · ${if (user.role == Role.NURSE) "Triage and handoff" else "Consultations"}")
+                        ErrorCards(state, setOf("queue"), vm::refresh)
+                        val queue = state.queue.filter { if (user.role == Role.NURSE) it.status in listOf("WAITING", "TRIAGE", "WAITING_DOCTOR") else it.status in listOf("WAITING_DOCTOR", "DOCTOR_READY", "CONSULTATION", "WAITING") }
+                        if (queue.isEmpty() && "queue" !in state.errors) EmptyCard("No patients waiting", "New arrivals will appear here after check-in.")
+                        PagedRows(queue) { entry -> InfoCard(entry.patient_name, "${entry.mrn} · Token ${entry.token.orEmpty()}") {
+                            StatusPill(entry.status); entry.wait_minutes?.let { Text("Waiting ${it.toInt()} minutes") }
+                            Button(onClick = { vm.loadPatient(entry.patient_id, entry); patientOpen = true; patientPage = "Visit" }, enabled = !state.busy) { Text("Open visit") }
+                        } }
+                    }
+                    "Patient records" -> PatientRecordsSearch(vm, state) { patient ->
+                        vm.loadPatient(patient.id); patientOpen = true; patientPage = "Records"
+                    }
+                    "Appointments" -> AppointmentPage(vm, state, staff = true)
+                    "Lab workflow" -> { PageHeading("Lab workflow", "Collection, verified results and clinical review."); ErrorCards(state, setOf("labs"), vm::refresh); LabList(vm, state, state.labs, patient = false) }
+                    "Overview" -> AdminOverview(vm, state)
+                    "Staff" -> StaffAdministration(vm, state)
+                    "Patients" -> PatientRegistration(vm, state)
+                    "Doctor schedules" -> SchedulePage(vm, state)
+                    "Audit trail" -> { PageHeading("Audit trail"); ErrorCards(state, setOf("audit"), vm::refresh); PagedRows(state.audit) { InfoCard(label(it.action.orEmpty()), displayDate(it.timestamp ?: it.created_at)) { Text("Actor: ${it.actor_id ?: it.user_id ?: "System"}") } } }
+                    "Notifications" -> NotificationsPage(vm, state)
+                    "Profile" -> ProfilePage(vm, state, onLogout)
+                }
+            }
         }
     }
 }
