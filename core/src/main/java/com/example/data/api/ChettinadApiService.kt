@@ -13,7 +13,7 @@ interface ChettinadApiService {
     suspend fun requestOtp(@Body payload: Map<String, String>): OtpRequestResponse
 
     @POST("auth/opd/otp/verify")
-    suspend fun verifyOtp(@Body payload: Map<String, Any>): LoginResponse
+    suspend fun verifyOtp(@Body payload: Map<String, @JvmSuppressWildcards Any>): LoginResponse
 
     @POST("auth/refresh")
     fun refreshSync(): Call<RefreshResponse>
@@ -69,13 +69,15 @@ data class LoginResponse(
     val userId: String,
     val name: String?,
     val must_change_password: Boolean?,
-    val token_type: String
+    val token_type: String = "bearer"
 )
 
 data class OtpRequestResponse(
     val sent: Boolean,
     val expires_in: Int,
-    val development_code: String?
+    val development_code: String? = null,
+    val challenge_id: String? = null,
+    val retry_after: Int = 60
 )
 
 data class RefreshResponse(
@@ -83,7 +85,7 @@ data class RefreshResponse(
     val role: String,
     val account_type: String,
     val must_change_password: Boolean?,
-    val token_type: String
+    val token_type: String = "bearer"
 )
 
 data class SessionResponse(
@@ -151,8 +153,16 @@ data class ConsultationData(
     val diagnosis_ids: List<String> = emptyList(),
     val treatment: String? = null,
     val advice: String? = null,
-    val medications: List<Medication> = emptyList()
-)
+    val medications: List<Medication> = emptyList(),
+    val follow_up: Map<String, String>? = null
+) {
+    /** The hospital accepts omitted/empty optional text, but rejects JSON null. */
+    fun forWrite(): ConsultationData = copy(
+        complaint = complaint.orEmpty(), history = history.orEmpty(), previous_history = previous_history.orEmpty(),
+        examination = examination.orEmpty(), assessment = assessment.orEmpty(), treatment = treatment.orEmpty(), advice = advice.orEmpty(),
+        medications = medications.map { it.copy(instructions = it.instructions.orEmpty()) }
+    )
+}
 
 data class Medication(
     val drug_id: String,
@@ -168,7 +178,8 @@ data class Medication(
 
 data class ConsultationWrite(
     val __v: Int,
-    val data: ConsultationData
+    val data: ConsultationData,
+    val patient__v: Int? = null
 )
 
 data class NoteVersion(

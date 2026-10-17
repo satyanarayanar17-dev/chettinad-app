@@ -13,7 +13,7 @@ android {
   productFlavors {
     create("demo") {
       dimension = "environment"
-      buildConfigField("String", "API_BASE_URL", "\"https://demo.local/\"")
+      buildConfigField("String", "API_BASE_URL", "\"${project.findProperty("DEMO_API_URL") ?: "https://chettinad-care-api.onrender.com/api/v1/"}\"")
     }
     create("staging") {
       dimension = "environment"
@@ -28,6 +28,9 @@ android {
       val prodUrl = project.findProperty("PRODUCTION_API_URL") as? String ?: System.getenv("PRODUCTION_API_URL")
       if (prodUrl == null && gradle.startParameter.taskNames.any { it.contains("Production", ignoreCase = true) }) {
          throw GradleException("PRODUCTION_API_URL is required for production builds.")
+      }
+      if (prodUrl != null && (!prodUrl.startsWith("https://") || !prodUrl.endsWith("/api/v1/"))) {
+        throw GradleException("PRODUCTION_API_URL must be an HTTPS URL ending in /api/v1/.")
       }
       buildConfigField("String", "API_BASE_URL", "\"${prodUrl ?: "https://production.placeholder/"}\"")
     }
@@ -79,6 +82,7 @@ dependencies {
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
   implementation(libs.retrofit)
+  debugImplementation(libs.androidx.compose.ui.test.manifest)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)

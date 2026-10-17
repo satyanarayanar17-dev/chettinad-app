@@ -16,6 +16,15 @@ class TokenAuthenticator(
     private val isRefreshing = AtomicBoolean(false)
 
     override fun authenticate(route: Route?, response: Response): Request? {
+        var attempts = 0
+        var prior: Response? = response
+        while (prior != null) { attempts++; prior = prior.priorResponse }
+        if (attempts > 1) { tokenManager.clear(); return null }
+        // Authentication failures are final: never refresh/replay a one-time OTP.
+        val path = response.request.url.encodedPath
+        if (path.contains("auth/opd/otp/") || path.contains("auth/login/") || path.endsWith("auth/change-password")) return null
+        if (response.request.header("Authorization") == null) return null
+
         // Prevent infinite loops if refresh itself returns 401
         if (response.request.url.encodedPath.contains("auth/refresh")) {
             tokenManager.clear()
