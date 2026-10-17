@@ -10,6 +10,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.example.address.BirthDateField
+import com.example.address.IndianAddressFields
+import com.example.address.validBirthDate
 import com.example.domain.model.Role
 import com.example.ui.components.AppLogo
 
@@ -26,6 +29,7 @@ fun LoginScreen(
     var code by remember(uiState.challengeId, uiState.otpRequested) { mutableStateOf("") }
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(uiState.expiresAt) { while (uiState.otpRequested) { now = System.currentTimeMillis(); kotlinx.coroutines.delay(1000) } }
+    var addressValid by remember(uiState.phone) { mutableStateOf(false) }
     val profile = remember(uiState.phone) { mutableStateMapOf<String, String>() }
     LaunchedEffect(uiState.user) { uiState.user?.let { onLoginSuccess(it.role) } }
 
@@ -61,23 +65,17 @@ fun LoginScreen(
                 if (uiState.profileRequired) {
                     Text("New patient registration", style = MaterialTheme.typography.titleLarge)
                     Text("Enter the patient's details as they should appear in hospital records.")
-                    val fields = listOf(
-                        "name" to "Full name", "dob" to "Date of birth (YYYY-MM-DD)",
-                        "address" to "Address", "city" to "City", "state" to "State",
-                        "pin_code" to "PIN code", "emergency_contact" to "Emergency contact mobile"
-                    )
-                    fields.forEach { (key, label) ->
-                        OutlinedTextField(
-                            value = profile[key].orEmpty(), onValueChange = { profile[key] = it },
-                            label = { Text(label) }, singleLine = key != "address",
-                            enabled = !uiState.isLoading, modifier = Modifier.fillMaxWidth(),
-                            keyboardOptions = KeyboardOptions(keyboardType = when (key) {
-                                "pin_code" -> KeyboardType.Number
-                                "emergency_contact" -> KeyboardType.Phone
-                                else -> KeyboardType.Text
-                            })
-                        )
-                    }
+                    OutlinedTextField(value = profile["name"].orEmpty(), onValueChange = { profile["name"] = it },
+                        label = { Text("Full name") }, singleLine = true, enabled = !uiState.isLoading, modifier = Modifier.fillMaxWidth())
+                    BirthDateField(profile["dob"].orEmpty(), { profile["dob"] = it }, !uiState.isLoading)
+                    OutlinedTextField(value = profile["address"].orEmpty(), onValueChange = { profile["address"] = it },
+                        label = { Text("Address") }, enabled = !uiState.isLoading, modifier = Modifier.fillMaxWidth())
+                    IndianAddressFields(profile["state"].orEmpty(), profile["pin_code"].orEmpty(), profile["city"].orEmpty(),
+                        { profile["state"] = it }, { profile["pin_code"] = it }, { profile["city"] = it },
+                        enabled = !uiState.isLoading, onValidityChange = { addressValid = it })
+                    OutlinedTextField(value = profile["emergency_contact"].orEmpty(), onValueChange = { profile["emergency_contact"] = it },
+                        label = { Text("Emergency contact mobile") }, singleLine = true, enabled = !uiState.isLoading,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.fillMaxWidth())
                     Text("Gender", modifier = Modifier.align(Alignment.Start))
                     listOf("Female", "Male", "Other", "Not specified").forEach { gender ->
                         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -91,7 +89,7 @@ fun LoginScreen(
                 Button(
                     onClick = { onVerifyOtp(code, if (uiState.profileRequired) profile.toMap() else null) },
                     enabled = !uiState.isLoading && now < uiState.expiresAt && code.length == 6 &&
-                        (!uiState.profileRequired || required.all { !profile[it].isNullOrBlank() }),
+                        (!uiState.profileRequired || (addressValid && validBirthDate(profile["dob"].orEmpty()) && required.all { !profile[it].isNullOrBlank() })),
                     modifier = Modifier.fillMaxWidth()
                 ) { Text(if (uiState.profileRequired) "Register and sign in" else "Verify and sign in") }
                 TextButton(onClick = { code = ""; onRequestOtp(uiState.phone) }, enabled = !uiState.isLoading && now >= uiState.resendAt) {

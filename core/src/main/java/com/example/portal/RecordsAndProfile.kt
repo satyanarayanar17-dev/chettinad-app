@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.example.data.api.*
 import com.example.domain.model.Role
+import com.example.address.IndianAddressFields
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -183,18 +184,23 @@ private fun printPrescription(context: Context, patient: PatientProfile, rx: Pre
     if (!open) return
     val reviewed = remember(profile.id) { profile }
     val changed = reviewed.__v != profile.__v
+    var addressValid by remember(profile.id) { mutableStateOf(false) }
     val fields = remember(profile.id) { mutableStateMapOf(
         "email" to reviewed.email.orEmpty(), "address" to reviewed.address.orEmpty(),
         "city" to reviewed.city.orEmpty(), "state" to reviewed.state.orEmpty(),
         "pin_code" to reviewed.pin_code.orEmpty(), "emergency_contact" to reviewed.emergency_contact.orEmpty()) }
     InfoCard("Contact details", "Your sign-in mobile and hospital identity require reception assistance to change.") {
         if (changed) Text("Your hospital profile changed in another app. Your edits are kept here. Close and reopen the editor to review the latest details.")
-        listOf("email" to "Email (optional)", "address" to "Address", "city" to "City", "state" to "State", "pin_code" to "PIN code", "emergency_contact" to "Emergency contact mobile").forEach { (key, title) ->
+        listOf("email" to "Email (optional)", "address" to "Address").forEach { (key, title) ->
             Field(title, fields[key].orEmpty(), { fields[key] = it }, !state.busy)
         }
+        IndianAddressFields(fields["state"].orEmpty(), fields["pin_code"].orEmpty(), fields["city"].orEmpty(),
+            { fields["state"] = it }, { fields["pin_code"] = it }, { fields["city"] = it },
+            enabled = !state.busy, onValidityChange = { addressValid = it })
+        Field("Emergency contact mobile", fields["emergency_contact"].orEmpty(), { fields["emergency_contact"] = it }, !state.busy)
         val email = fields["email"].orEmpty().trim()
         val phone = fields["emergency_contact"].orEmpty().replace(Regex("[\\s()-]"), "")
-        val valid = listOf("address", "city", "state").all { !fields[it].isNullOrBlank() } &&
+        val valid = addressValid && listOf("address", "city", "state").all { !fields[it].isNullOrBlank() } &&
             fields["pin_code"].orEmpty().matches(Regex("[1-9][0-9]{5}")) &&
             phone.matches(Regex("(?:\\+91|91|0)?[6-9][0-9]{9}")) &&
             (email.isBlank() || android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches())

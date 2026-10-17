@@ -5,6 +5,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import com.example.data.api.*
+import com.example.address.BirthDateField
+import com.example.address.IndianAddressFields
+import com.example.address.validBirthDate
 
 @Composable fun AdminOverview(vm: PortalViewModel, state: PortalState) {
     PageHeading("Hospital overview", "Current operations from the shared hospital backend.")
@@ -81,11 +84,18 @@ import com.example.data.api.*
     PagedRows(state.patients) { patient -> InfoCard(patient.name, "${patient.mrn} · ${patient.phone}") }
     OutlinedButton(onClick = { create = !create }, enabled = !state.busy) { Text(if (create) "Close registration" else "Register new patient") }
     if (create) {
+        var addressValid by remember { mutableStateOf(false) }
         val values = remember { mutableStateMapOf<String, String>() }; var gender by remember { mutableStateOf("Not specified") }
         InfoCard("Patient details", "Check the patient's identity and mobile before creating the record.") {
-            listOf("name" to "Full name", "phone" to "Mobile number", "dob" to "Date of birth (YYYY-MM-DD)", "address" to "Address", "city" to "City", "state" to "State", "pin_code" to "PIN code", "emergency_contact" to "Emergency contact mobile").forEach { (key,title) -> Field(title, values[key].orEmpty(), { values[key] = it }, !state.busy) }
+            listOf("name" to "Full name", "phone" to "Mobile number").forEach { (key,title) -> Field(title, values[key].orEmpty(), { values[key] = it }, !state.busy) }
+            BirthDateField(values["dob"].orEmpty(), { values["dob"] = it }, !state.busy)
+            Field("Address", values["address"].orEmpty(), { values["address"] = it }, !state.busy)
+            IndianAddressFields(values["state"].orEmpty(), values["pin_code"].orEmpty(), values["city"].orEmpty(),
+                { values["state"] = it }, { values["pin_code"] = it }, { values["city"] = it },
+                enabled = !state.busy, onValidityChange = { addressValid = it })
+            Field("Emergency contact mobile", values["emergency_contact"].orEmpty(), { values["emergency_contact"] = it }, !state.busy)
             ChoiceRow(listOf("Female", "Male", "Other", "Not specified"), gender, { gender = it }, !state.busy)
-            Button(onClick = { vm.action("Patient registered") { vm.api.createPatient(values.toMap() + ("gender" to gender)); values.clear(); create = false } }, enabled = !state.busy && listOf("name", "phone", "dob", "address", "city", "state", "pin_code", "emergency_contact").all { !values[it].isNullOrBlank() } && validDate(values["dob"].orEmpty())) { Text("Register patient") }
+            Button(onClick = { vm.action("Patient registered") { vm.api.createPatient(values.toMap() + ("gender" to gender)); values.clear(); create = false } }, enabled = !state.busy && addressValid && listOf("name", "phone", "dob", "address", "city", "state", "pin_code", "emergency_contact").all { !values[it].isNullOrBlank() } && validBirthDate(values["dob"].orEmpty())) { Text("Register patient") }
         }
     }
 }
