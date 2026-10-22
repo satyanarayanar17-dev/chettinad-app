@@ -1,3 +1,5 @@
+> Historical report. See [ANDROID_IOS_PARITY.md](ANDROID_IOS_PARITY.md) for the current Android implementation and validation status.
+
 # Chettinad Care Android Backend Integration Status
 
 This document maps the proposed Android API contract to the existing Chettinad Care backend capabilities.

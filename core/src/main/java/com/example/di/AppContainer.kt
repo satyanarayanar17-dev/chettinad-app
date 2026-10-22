@@ -3,10 +3,12 @@ package com.example.di
 import android.content.Context
 import androidx.room.Room
 import com.example.core.BuildConfig
+import com.example.data.api.PortalApi
 import com.example.data.api.AuthInterceptor
 import com.example.data.api.ChettinadApiService
 import com.example.data.api.PersistentCookieJar
 import com.example.data.api.TokenAuthenticator
+import com.example.data.api.SessionBoundaryInterceptor
 import com.example.data.db.ChettinadDatabase
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.DoctorRepository
@@ -22,6 +24,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 
 interface AppContainer {
+    val portalApi: PortalApi
     val tokenManager: TokenManager
     val cookieJar: PersistentCookieJar
     val chettinadApiService: ChettinadApiService
@@ -36,7 +39,7 @@ interface AppContainer {
 class DefaultAppContainer(private val context: Context) : AppContainer {
 
     override val tokenManager: TokenManager by lazy {
-        TokenManager()
+        TokenManager(context)
     }
     
     override val cookieJar: PersistentCookieJar by lazy {
@@ -53,7 +56,7 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
 
     private val loggingInterceptor by lazy {
         HttpLoggingInterceptor().apply {
-            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY else HttpLoggingInterceptor.Level.NONE
+            level = HttpLoggingInterceptor.Level.NONE
         }
     }
 
@@ -61,6 +64,7 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
         OkHttpClient.Builder()
             .cookieJar(cookieJar)
             .addInterceptor(authInterceptor)
+            .addNetworkInterceptor(SessionBoundaryInterceptor(tokenManager, cookieJar))
             .authenticator(tokenAuthenticator)
             .addInterceptor(loggingInterceptor)
             .build()
@@ -79,6 +83,9 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
     }
+
+    override val portalApi: PortalApi by lazy { Retrofit.Builder().baseUrl(BuildConfig.API_BASE_URL).client(okHttpClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi).withNullSerialization()).build().create(PortalApi::class.java) }
 
     override val chettinadApiService: ChettinadApiService by lazy {
         retrofit.create(ChettinadApiService::class.java)
