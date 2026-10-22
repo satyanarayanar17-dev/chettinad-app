@@ -87,22 +87,31 @@ import kotlinx.coroutines.launch
     }
 }
 
-@Composable internal fun PatientRecordsSearch(vm: PortalViewModel, state: PortalState, onOpen: (PatientProfile) -> Unit) {
+@Composable internal fun PatientRecordsSearch(vm: PortalViewModel, state: PortalState, onOpen: (AssignedPatient) -> Unit) {
     var query by remember { mutableStateOf("") }
     var searched by remember { mutableStateOf<String?>(null) }
-    PageHeading("Patient records", "Find past visits and shared care records by name or MRN. Hospital access rules apply.")
-    ErrorCards(state, setOf("patients"), vm::refresh)
+    PageHeading("Patient records", if (vm.user.role == Role.DOCTOR) "Search patients from your assigned visits by name or MRN." else "Search patients currently in your care by name or MRN.")
+    ErrorCards(state, setOf("appointments", "queue"), vm::refresh)
     Field("Patient name or MRN", query, { query = it }, !state.busy)
-    Button(onClick = { searched = query; vm.searchPatients(query.trim()) }, enabled = !state.busy && query.trim().length in 2..200) { Text("Search records") }
-    if (searched == query && state.patientSearchQuery == query.trim()) {
-        if (state.patientSearchLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
-        else if (state.patients.isEmpty() && "patients" !in state.errors) EmptyCard("No matching patients", "Check the patient name or MRN and search again.")
-        PagedRows(state.patients) { patient ->
+    Button(onClick = { searched = query }, enabled = !state.busy && query.trim().length in 2..200) { Text("Search records") }
+    if (searched == query) {
+        val patients = assignedPatients(state, vm.user.role).filter { it.name.contains(query.trim(), true) || it.mrn.contains(query.trim(), true) }
+        if (patients.isEmpty()) EmptyCard("No matching assigned patients", "Check the name or MRN, or refresh to load new visits.")
+        PagedRows(patients) { patient ->
             InfoCard(patient.name, patient.mrn) {
                 Button(onClick = { onOpen(patient) }, enabled = !state.busy) { Text("Open records") }
             }
         }
     }
+}
+
+internal data class AssignedPatient(val id: String, val name: String, val mrn: String)
+internal fun assignedPatients(state: PortalState, role: Role): List<AssignedPatient> {
+    val rows = state.queue.filter { it.status != "COMPLETED" }.map { AssignedPatient(it.patient_id, it.patient_name, it.mrn) }
+    val history = if (role == Role.DOCTOR) state.appointments.filter { it.encounter_id != null || it.status in setOf("PENDING_CONFIRMATION", "CONFIRMED", "CHECKED_IN", "IN_TRIAGE", "READY_FOR_DOCTOR", "IN_CONSULTATION") }.mapNotNull { a ->
+        a.patient_id?.let { AssignedPatient(it, a.patient_name ?: "Patient", a.mrn.orEmpty()) }
+    } else emptyList()
+    return (rows + history).distinctBy { it.id }.sortedBy { it.name.lowercase() }
 }
 
 @Composable internal fun TriagePage(vm: PortalViewModel, state: PortalState) {

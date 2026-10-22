@@ -8,6 +8,7 @@ import com.example.data.api.AuthInterceptor
 import com.example.data.api.ChettinadApiService
 import com.example.data.api.PersistentCookieJar
 import com.example.data.api.TokenAuthenticator
+import com.example.data.api.SessionBoundaryInterceptor
 import com.example.data.db.ChettinadDatabase
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.DoctorRepository
@@ -63,6 +64,7 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
         OkHttpClient.Builder()
             .cookieJar(cookieJar)
             .addInterceptor(authInterceptor)
+            .addNetworkInterceptor(SessionBoundaryInterceptor(tokenManager, cookieJar))
             .authenticator(tokenAuthenticator)
             .addInterceptor(loggingInterceptor)
             .build()

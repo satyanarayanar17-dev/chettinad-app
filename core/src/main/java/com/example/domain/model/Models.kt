@@ -10,7 +10,8 @@ data class User(
     val role: Role,
     val department: String? = null,
     val isActive: Boolean = true,
-    val mustChangePassword: Boolean = false
+    val mustChangePassword: Boolean = false,
+    val accountId: String? = null
 )
 
 data class Patient(
