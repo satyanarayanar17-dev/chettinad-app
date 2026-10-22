@@ -85,7 +85,8 @@ data class RefreshResponse(
     val role: String,
     val account_type: String,
     val must_change_password: Boolean?,
-    val token_type: String = "bearer"
+    val token_type: String = "bearer",
+    val userId: String? = null
 )
 
 data class SessionResponse(

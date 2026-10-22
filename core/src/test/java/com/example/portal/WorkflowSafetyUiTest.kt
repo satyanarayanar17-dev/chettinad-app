@@ -59,13 +59,14 @@ class WorkflowSafetyUiTest {
 
     @Test fun pastPatientRecordsStayReachableAndChangingTheSearchHidesTheOldIdentity() {
         val vm = mockk<PortalViewModel>(relaxed = true)
-        val patient = PatientProfile("past-patient", "MRN-PAST", "Synthetic past patient", "+919100000001", "1990-01-01", "Female")
+        every { vm.user } returns User("doctor-1", "Synthetic doctor", Role.DOCTOR)
+        val appointment = Appointment(id = "past-visit", __v = 4, status = "COMPLETED", scheduled_at = "2026-10-15T04:30:00Z", patient_id = "past-patient", patient_name = "Synthetic past patient", mrn = "MRN-PAST", encounter_id = "past-encounter")
         var opened: String? = null
-        compose.setContent { AppTheme { Column { PatientRecordsSearch(vm, PortalState(patients = listOf(patient), patientSearchQuery = "MRN-PAST")) { opened = it.id } } } }
+        compose.setContent { AppTheme { Column { PatientRecordsSearch(vm, PortalState(appointments = listOf(appointment))) { opened = it.id } } } }
         compose.onNodeWithText("Open records").assertDoesNotExist()
         compose.onNode(hasText("Patient name or MRN") and hasSetTextAction()).performTextInput("MRN-PAST")
         compose.onNodeWithText("Search records").performClick()
-        verify { vm.searchPatients("MRN-PAST") }
+        verify(exactly = 0) { vm.searchPatients(any()) }
         compose.onNodeWithText("Open records").performClick()
         compose.runOnIdle { org.junit.Assert.assertEquals("past-patient", opened) }
         compose.onNode(hasText("Patient name or MRN") and hasSetTextAction()).performTextReplacement("Different patient")

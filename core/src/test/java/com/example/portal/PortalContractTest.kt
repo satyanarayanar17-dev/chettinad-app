@@ -16,6 +16,13 @@ import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 
 class PortalContractTest {
+    @org.junit.Test fun clinicalSearchUsesAssignedVisitsInsteadOfTheAdminDirectory() {
+        val history = Appointment("apt", "2026-10-22T05:00:00Z", "COMPLETED", 1, patient_id = "past", patient_name = "Synthetic past", mrn = "MRN-PAST", encounter_id = "enc-past")
+        val queue = QueuePatient("enc-live", "live", "Synthetic live", "MRN-LIVE", "WAITING_DOCTOR", 1)
+        val state = PortalState(appointments = listOf(history, history.copy(id = "cancelled", patient_id = "never-seen", status = "CANCELLED", encounter_id = null)), queue = listOf(queue))
+        org.junit.Assert.assertEquals(setOf("past", "live"), assignedPatients(state, com.example.domain.model.Role.DOCTOR).map { it.id }.toSet())
+        org.junit.Assert.assertEquals(listOf("live"), assignedPatients(state, com.example.domain.model.Role.NURSE).map { it.id })
+    }
     private val server = MockWebServer()
     private lateinit var api: PortalApi
     private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
