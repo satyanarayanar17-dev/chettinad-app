@@ -46,6 +46,7 @@ class AuthViewModel(
     }
 
     fun login(username: String, pin: String) {
+        if (_uiState.value.isLoading) return
         if (username.isBlank() || pin.isBlank()) {
             _uiState.update { it.copy(error = "Please enter credentials.") }
             return

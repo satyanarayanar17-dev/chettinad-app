@@ -1,3 +1,5 @@
+> Historical report. See [ANDROID_IOS_PARITY.md](ANDROID_IOS_PARITY.md) for the current Android implementation and validation status.
+
 # Android vs Web Feature Parity Audit
 
 | Workflow | Web | Android | Backend API | Mobile Required? | Status |

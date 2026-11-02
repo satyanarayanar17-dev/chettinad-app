@@ -8,45 +8,27 @@ import okhttp3.CookieJar
 import okhttp3.HttpUrl
 
 class PersistentCookieJar(context: Context) : CookieJar {
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
-
-    private val sharedPreferences = EncryptedSharedPreferences.create(
-        context,
-        "chettinad_cookies",
-        masterKey,
+    private val preferences = EncryptedSharedPreferences.create(context, "chettinad_cookies_v2",
+        MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM)
 
-    override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-        val editor = sharedPreferences.edit()
+    @Synchronized override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+        val edit = preferences.edit()
         for (cookie in cookies) {
-            // Simplistic storage, fine for cc_opd_refresh
-            editor.putString(cookie.name, cookie.value)
+            val key = "${cookie.domain}|${cookie.path}|${cookie.name}"
+            if (cookie.expiresAt <= System.currentTimeMillis()) edit.remove(key)
+            else edit.putString(key, "${url.scheme}://${url.host}:${url.port}\n$cookie")
         }
-        editor.apply()
+        edit.apply()
     }
-
-    override fun loadForRequest(url: HttpUrl): List<Cookie> {
-        val cookies = mutableListOf<Cookie>()
-        for ((name, value) in sharedPreferences.all) {
-            if (value is String) {
-                // In production, we'd properly serialize/deserialize cookies, but this is a simplified version
-                val cookie = Cookie.Builder()
-                    .name(name)
-                    .value(value)
-                    .domain(url.host) // Assume same domain
-                    .path("/")
-                    .build()
-                cookies.add(cookie)
-            }
+    @Synchronized override fun loadForRequest(url: HttpUrl): List<Cookie> = preferences.all.values.mapNotNull { value ->
+        val encoded = value as? String ?: return@mapNotNull null
+        // Parse against the request only when the stored origin matches exactly.
+        if (encoded.substringBefore('\n') != "${url.scheme}://${url.host}:${url.port}") return@mapNotNull null
+        Cookie.parse(url, encoded.substringAfter('\n'))?.takeIf {
+            it.expiresAt > System.currentTimeMillis() && it.matches(url)
         }
-        return cookies
     }
-    
-    fun clear() {
-        sharedPreferences.edit().clear().apply()
-    }
+    @Synchronized fun clear() { preferences.edit().clear().apply() }
 }

@@ -7,11 +7,11 @@ import androidx.compose.ui.graphics.Color
 // Chettinad Care Institutional Theme Colors
 // Calm, precise, minimal and professional
 
-val ChettinadPrimary = Color(0xFF003876)
+val ChettinadPrimary = Color(0xFF000666)
 val ChettinadPrimaryContainer = Color(0xFFD3E3FD)
 val ChettinadOnPrimaryContainer = Color(0xFF001945)
 
-val ChettinadSecondary = Color(0xFF00796B)
+val ChettinadSecondary = Color(0xFF087F72)
 val ChettinadSecondaryContainer = Color(0xFFB2DFDB)
 val ChettinadOnSecondaryContainer = Color(0xFF00201C)
 
@@ -22,8 +22,8 @@ val ChettinadBackground = Color(0xFFF8F9FA)
 val ChettinadSurface = Color(0xFFFFFFFF)
 val ChettinadSurfaceVariant = Color(0xFFE9ECEF)
 
-val ChettinadOnBackground = Color(0xFF1E1E1E)
-val ChettinadOnSurface = Color(0xFF1E1E1E)
+val ChettinadOnBackground = Color(0xFF191C1D)
+val ChettinadOnSurface = Color(0xFF191C1D)
 val ChettinadOnSurfaceVariant = Color(0xFF495057)
 
 val LightColorScheme = lightColorScheme(
@@ -62,7 +62,7 @@ val DarkColorScheme = darkColorScheme(
     onErrorContainer = Color(0xFFFFDAD6),
     background = Color(0xFF121212),
     onBackground = Color(0xFFE0E0E0),
-    surface = Color(0xFF1E1E1E),
+    surface = Color(0xFF191C1D),
     onSurface = Color(0xFFE0E0E0),
     surfaceVariant = Color(0xFF323232),
     onSurfaceVariant = Color(0xFFBDBDBD),

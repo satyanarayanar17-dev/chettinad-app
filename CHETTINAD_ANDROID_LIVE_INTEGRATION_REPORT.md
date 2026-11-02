@@ -1,3 +1,5 @@
+> Historical report. See [ANDROID_IOS_PARITY.md](ANDROID_IOS_PARITY.md) for the current Android implementation and validation status.
+
 # Chettinad Care Android v2 Backend Integration Report
 
 ## 1. Environment Details

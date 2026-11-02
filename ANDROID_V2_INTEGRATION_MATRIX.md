@@ -1,3 +1,5 @@
+> Historical report. See [ANDROID_IOS_PARITY.md](ANDROID_IOS_PARITY.md) for the current Android implementation and validation status.
+
 # Android v2 API Integration Gap Matrix
 
 | Workflow | Current Retrofit | Actual Backend Route | Gap | Status |

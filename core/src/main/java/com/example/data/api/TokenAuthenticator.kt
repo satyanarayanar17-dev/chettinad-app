@@ -1,58 +1,43 @@
 package com.example.data.api
 
+import com.example.domain.model.Role
+import com.example.util.SessionRequestContext
 import com.example.util.TokenManager
-import kotlinx.coroutines.runBlocking
 import okhttp3.Authenticator
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.Route
-import java.util.concurrent.atomic.AtomicBoolean
+import java.io.IOException
 
-class TokenAuthenticator(
-    private val tokenManager: TokenManager,
-    private val apiServiceProvider: () -> ChettinadApiService
-) : Authenticator {
-
-    private val isRefreshing = AtomicBoolean(false)
-
+class TokenAuthenticator(private val tokenManager: TokenManager, private val apiServiceProvider: () -> ChettinadApiService) : Authenticator {
     override fun authenticate(route: Route?, response: Response): Request? {
-        // Prevent infinite loops if refresh itself returns 401
-        if (response.request.url.encodedPath.contains("auth/refresh")) {
-            tokenManager.clear()
-            return null
-        }
-
-        // Avoid multiple simultaneous refresh requests
+        val path = response.request.url.encodedPath
+        if (path.contains("auth/opd/otp/") || path.contains("auth/login/") || path.endsWith("auth/change-password")) return null
+        val context = response.request.tag(SessionRequestContext::class.java) ?: tokenManager.requestContext()
+        if (!tokenManager.isCurrent(context.generation) || response.request.header("Authorization") == null) return null
+        var attempts = 0; var prior: Response? = response
+        while (prior != null) { attempts++; prior = prior.priorResponse }
+        if (attempts > 1 || path.contains("auth/refresh")) { tokenManager.clearIfCurrent(context.generation); return null }
         synchronized(this) {
-            val currentToken = tokenManager.getToken()
-
-            // If the token has already been refreshed by another thread, just retry
-            if (response.request.header("Authorization") != "Bearer $currentToken") {
-                return response.request.newBuilder()
-                    .header("Authorization", "Bearer ${tokenManager.getToken()}")
-                    .build()
+            val current = tokenManager.requestContext()
+            if (current.generation != context.generation || current.accessToken == null) return null
+            if (response.request.header("Authorization") != "Bearer ${current.accessToken}")
+                return response.request.newBuilder().header("Authorization", "Bearer ${current.accessToken}").build()
+            // A transient failure must not erase an otherwise recoverable signed-in session.
+            val refreshed = apiServiceProvider().refreshSync().execute()
+            if (!tokenManager.isCurrent(context.generation)) return null
+            if (refreshed.code() in listOf(400, 401, 403)) { tokenManager.clearIfCurrent(context.generation); return null }
+            if (!refreshed.isSuccessful) throw IOException("Unable to refresh the hospital session.")
+            val body = refreshed.body() ?: throw IOException("Empty session refresh response.")
+            val user = tokenManager.getUser()
+            val account = user?.accountId ?: user?.id?.takeIf { user.role != Role.PATIENT }
+            if (user != null && (!body.role.equals(user.role.name, true) ||
+                    !body.account_type.equals(if (user.role == Role.PATIENT) "patient" else "staff", true) ||
+                    (account != null && body.userId != account))) {
+                tokenManager.clearIfCurrent(context.generation); return null
             }
-
-            try {
-                // Perform synchronous refresh call
-                val refreshResponse = apiServiceProvider().refreshSync().execute()
-
-                if (refreshResponse.isSuccessful) {
-                    val newToken = refreshResponse.body()?.access_token
-                    if (newToken != null) {
-                        tokenManager.saveToken(newToken)
-                        return response.request.newBuilder()
-                            .header("Authorization", "Bearer $newToken")
-                            .build()
-                    }
-                }
-            } catch (e: Exception) {
-                // Ignore network errors during refresh, let it fail
-            }
-            
-            // Refresh failed or returned 401
-            tokenManager.clear()
-            return null
+            if (body.access_token.isBlank() || !tokenManager.replaceToken(current, body.access_token)) return null
+            return response.request.newBuilder().header("Authorization", "Bearer ${body.access_token}").build()
         }
     }
 }
