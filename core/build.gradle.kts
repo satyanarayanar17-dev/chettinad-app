@@ -1,10 +1,54 @@
 import java.net.URI
 
+abstract class ValidateClinicalPublishing : DefaultTask() {
+  @get:Input abstract val apiUrl: Property<String>
+  @get:Input abstract val approved: Property<String>
+  @get:Input abstract val privacyUrl: Property<String>
+  @get:Input abstract val supportUrl: Property<String>
+
+  @TaskAction
+  fun validate() {
+    val base = apiUrl.get()
+    if (base.isBlank()) throw GradleException("PRODUCTION_API_URL is required for production releases.")
+    val api = runCatching { URI(base) }.getOrNull()
+    if (api == null || api.scheme != "https" || api.host.isNullOrBlank() ||
+        api.userInfo != null || api.rawQuery != null || api.fragment != null ||
+        !base.endsWith("/api/v1/")) {
+      throw GradleException("PRODUCTION_API_URL must be an HTTPS URL ending in /api/v1/ with no credentials, query or fragment.")
+    }
+    if (approved.get() != "true") {
+      throw GradleException("Production release requires -PPILOT_BACKEND_APPROVED=true after verifying the live API, durable storage and real OTP delivery.")
+    }
+    mapOf("PRIVACY_POLICY_URL" to privacyUrl.get(), "SUPPORT_URL" to supportUrl.get()).forEach { (setting, value) ->
+      val uri = runCatching { URI(value) }.getOrNull()
+      if (value.isBlank() || uri == null || uri.scheme != "https" || uri.host.isNullOrBlank() || uri.userInfo != null) {
+        throw GradleException("$setting must be configured as a public HTTPS URL without credentials for production releases.")
+      }
+    }
+  }
+}
+
 plugins {
   alias(libs.plugins.android.library)
   alias(libs.plugins.kotlin.compose)
   alias(libs.plugins.google.devtools.ksp)
   alias(libs.plugins.roborazzi)
+}
+
+val validateClinicalPublishing = tasks.register<ValidateClinicalPublishing>("validateClinicalPublishing") {
+  group = "verification"
+  description = "Reject clinical release artifacts until the approved API and public policies are configured."
+  apiUrl.set(providers.gradleProperty("PRODUCTION_API_URL").orElse(providers.environmentVariable("PRODUCTION_API_URL")).orElse(""))
+  approved.set(providers.gradleProperty("PILOT_BACKEND_APPROVED").orElse(""))
+  privacyUrl.set(providers.gradleProperty("PRIVACY_POLICY_URL").orElse(providers.environmentVariable("PRIVACY_POLICY_URL")).orElse(""))
+  supportUrl.set(providers.gradleProperty("SUPPORT_URL").orElse(providers.environmentVariable("SUPPORT_URL")).orElse(""))
+}
+
+// Every app production release compiles this variant, even when invoked through
+// aggregate tasks such as assembleRelease or bundleRelease. Unlike command-name
+// checks, this dependency cannot be skipped by selecting an aggregate task.
+tasks.configureEach {
+  if (name == "generateProductionReleaseBuildConfig") dependsOn(validateClinicalPublishing)
 }
 
 android {

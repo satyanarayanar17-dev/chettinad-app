@@ -13,7 +13,7 @@ import com.example.core.BuildConfig
 
 @Composable fun AppEnvironment(content: @Composable () -> Unit) {
     if (BuildConfig.FLAVOR == "production") { content(); return }
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding()) {
         Text("Test environment · synthetic records only", textAlign = TextAlign.Center,
             style = MaterialTheme.typography.labelMedium,
             color = Color(0xFF594B12), modifier = Modifier.fillMaxWidth()

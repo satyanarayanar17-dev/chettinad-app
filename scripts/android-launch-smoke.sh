@@ -13,6 +13,10 @@ capture_failure() {
 }
 trap capture_failure EXIT
 
+# Use a real 16:9 emulator viewport for shareable captures; no image cropping/editing.
+# Storage instrumentation runs before this script, and both apps are relaunched below.
+adb shell wm size 1080x1920
+adb shell wm size > native-qa/display-size.txt
 adb install -r native-apks/patient/app-patient-demo-debug.apk
 adb install -r native-apks/staff/app-staff-demo-debug.apk
 for kind in patient staff; do
@@ -49,6 +53,7 @@ for kind in patient staff; do
   adb exec-out screencap -p > "native-qa/$kind-login.png"
   adb shell pidof "$package" > "native-qa/$kind-pid.txt"
   test -s "native-qa/$kind-pid.txt"
+  python3 scripts/native-privacy-smoke.py "$kind"
 done
 adb shell pm list packages | tr -d '\r' > native-qa/installed-packages.txt
 for kind in patient staff; do
