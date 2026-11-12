@@ -32,7 +32,7 @@ class AuthScreenTest {
 
         composeTestRule.onNodeWithText("Chettinad Care Staff").assertExists()
         composeTestRule.onNodeWithText("Staff ID / Username").assertExists()
-        composeTestRule.onNodeWithText("Password / Secure PIN").assertExists()
+        composeTestRule.onNodeWithText("Password").assertExists()
         composeTestRule.onNodeWithText("Sign In").assertExists()
     }
 }

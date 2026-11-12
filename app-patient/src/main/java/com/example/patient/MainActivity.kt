@@ -14,7 +14,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val appContainer = (application as PatientApplication).container
             AppTheme {
-                PatientApp(appContainer)
+                com.example.ui.components.AppEnvironment { PatientApp(appContainer) }
             }
         }
     }

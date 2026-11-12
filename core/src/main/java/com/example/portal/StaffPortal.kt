@@ -5,8 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Menu
-import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.*
+import com.example.ui.components.AppLogo
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -24,13 +24,14 @@ import kotlinx.coroutines.launch
     val vm: PortalViewModel = viewModel(key = "staff:${user.id}", factory = PortalViewModel.factory(container.portalApi, user, container.tokenManager))
     val state by vm.state.collectAsState()
     ForegroundPortalSync(vm)
-    var tab by remember { mutableStateOf(if (user.mustChangePassword) "Profile" else if (user.role == Role.ADMIN) "Overview" else "Live queue") }
+    var tab by remember { mutableStateOf(if (user.mustChangePassword) "Profile" else if (user.role == Role.ADMIN) "Overview" else if (user.role == Role.DOCTOR) "Patients" else "Live queue") }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val contentScroll = rememberScrollState()
     var patientPage by remember { mutableStateOf("Visit") }
     var patientOpen by remember { mutableStateOf(false) }
     val destinations = if (user.mustChangePassword) listOf("Profile") else if (user.role == Role.ADMIN) listOf("Overview", "Appointments", "Patients", "Doctor schedules", "Staff", "Audit trail", "Notifications", "Profile")
+        else if (user.role == Role.DOCTOR) listOf("Patients", "Live queue", "Patient records", "Appointments", "Lab workflow", "Notifications", "Profile")
         else listOf("Live queue", "Patient records", "Appointments", "Lab workflow", "Notifications", "Profile")
     BackHandler(patientOpen && drawer.isClosed) { patientOpen = false }
     LaunchedEffect(tab, patientOpen, patientPage) { contentScroll.scrollTo(0) }
@@ -41,13 +42,16 @@ import kotlinx.coroutines.launch
         }
     }) {
         Scaffold(topBar = { TopAppBar(title = {
-            Column {
-                Text("Chettinad Care", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                Text("Staff · ${label(user.role.name)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            AppLogo(Modifier.width(136.dp).height(44.dp))
         }, navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Icon(Icons.Outlined.Menu, "Open navigation") } },
-            actions = { IconButton(onClick = vm::refresh, enabled = !state.loading && !state.busy) { Icon(Icons.Outlined.Refresh, "Refresh") } }) }) { padding ->
-            Column(Modifier.padding(padding).fillMaxSize().verticalScroll(contentScroll).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            actions = { IconButton(onClick = vm::refresh, enabled = !state.loading && !state.busy) { Icon(Icons.Outlined.Refresh, "Refresh") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)) },
+            bottomBar = { if (user.role == Role.DOCTOR && !user.mustChangePassword) NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
+                listOf("Patients" to Icons.Outlined.Groups, "Live queue" to Icons.Outlined.FormatListNumbered, "Lab workflow" to Icons.Outlined.Science, "Profile" to Icons.Outlined.PersonOutline).forEach { (destination, icon) ->
+                    NavigationBarItem(selected = tab == destination, onClick = { if (!state.busy) { tab = destination; patientOpen = false } }, icon = { Icon(icon, contentDescription = destination) }, label = { Text(when(destination) { "Live queue" -> "Queue"; "Lab workflow" -> "Labs"; else -> destination }) })
+                }
+            } }
+        ) { padding ->
+            Column(Modifier.padding(padding).fillMaxSize().verticalScroll(contentScroll).padding(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
                 if (patientOpen) {
                     TextButton(onClick = { patientOpen = false }, enabled = !state.busy) { Text(if (tab == "Live queue") "Back to live queue" else "Back to ${tab.lowercase()}") }
                     PageHeading(state.record?.patient?.name ?: state.encounter?.patient_name ?: "Patient", "${state.record?.patient?.mrn ?: state.encounter?.mrn.orEmpty()} · Visit ${state.encounter?.token.orEmpty()}")
@@ -76,7 +80,9 @@ import kotlinx.coroutines.launch
                     "Lab workflow" -> { PageHeading("Lab workflow", "Collection, verified results and clinical review."); ErrorCards(state, setOf("labs"), vm::refresh); LabList(vm, state, state.labs, patient = false) }
                     "Overview" -> AdminOverview(vm, state)
                     "Staff" -> StaffAdministration(vm, state)
-                    "Patients" -> PatientRegistration(vm, state)
+                    "Patients" -> PatientRegistration(vm, state) { id, entry ->
+                        vm.loadPatient(id, entry); patientOpen = true; patientPage = if (entry == null) "Care plan" else "Visit"
+                    }
                     "Doctor schedules" -> SchedulePage(vm, state)
                     "Audit trail" -> { PageHeading("Audit trail"); ErrorCards(state, setOf("audit"), vm::refresh); PagedRows(state.audit) { InfoCard(label(it.action.orEmpty()), displayDate(it.timestamp ?: it.created_at)) { Text("Actor: ${it.actor_id ?: it.user_id ?: "System"}") } } }
                     "Notifications" -> NotificationsPage(vm, state)
@@ -189,6 +195,8 @@ internal fun assignedPatients(state: PortalState, role: Role): List<AssignedPati
     if (reload) ConfirmAction("Load the hospital draft?", "This replaces your unsaved local edits with the latest hospital draft and patient record. Review them before signing.", "Load hospital draft", { reload = false }, { reload = false; vm.reloadHospitalDraft() })
     if (state.draftAvailable) InfoCard("A local draft is available", "Review it against the hospital record before saving.") { OutlinedButton(onClick = vm::recoverDraft, enabled = !state.busy) { Text("Recover local draft") } }
     val draft = state.draft
+    MedicationEditor(vm, state)
+    Text("Sign the prescription to share medicines with the patient. Set medication alerts in the Care plan tab.", style = MaterialTheme.typography.bodySmall)
     InfoCard("Consultation", "Changes are kept in an encrypted local draft. Save to hospital when ready.") {
         Field("Chief complaint", draft.complaint.orEmpty(), { vm.updateDraft(draft.copy(complaint = it)) }, !state.busy, 2)
         Field("History", draft.history.orEmpty(), { vm.updateDraft(draft.copy(history = it)) }, !state.busy, 3)
@@ -203,9 +211,7 @@ internal fun assignedPatients(state: PortalState, role: Role): List<AssignedPati
         Field("Treatment plan", draft.treatment.orEmpty(), { vm.updateDraft(draft.copy(treatment = it)) }, !state.busy, 2)
         Field("Advice and follow-up instructions", draft.advice.orEmpty(), { vm.updateDraft(draft.copy(advice = it)) }, !state.busy, 3)
     }
-    MedicationEditor(vm, state)
     if (!amendment) {
-    FollowUpEditor(vm, state)
     InfoCard("Laboratory tests") {
         var query by remember { mutableStateOf("") }
         Field("Search tests", query, { query = it }, !state.busy)

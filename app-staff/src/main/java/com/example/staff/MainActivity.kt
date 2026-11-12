@@ -14,7 +14,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val appContainer = (application as StaffApplication).container
             AppTheme {
-                StaffApp(appContainer)
+                com.example.ui.components.AppEnvironment { StaffApp(appContainer) }
             }
         }
     }

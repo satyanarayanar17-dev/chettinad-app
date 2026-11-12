@@ -1,8 +1,16 @@
 package com.example.portal
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ArrowDropDown
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.data.api.*
@@ -14,11 +22,12 @@ import com.example.domain.model.Role
     var editing by remember { mutableStateOf(false) }
     PageHeading(if (patient) "Today's care plan" else "Patient care plan", "Instructions from the care team. Times are in India Standard Time.")
     ErrorCards(state, setOf("care plan", "today", "timeline", "measurements"), vm::refresh)
-    if (patient) MeasurementEntrySection(vm, state)
+    CareCompletionCard(state.today)
     if (state.today.isEmpty() && "today" !in state.errors) EmptyCard("No tasks for today", "Tasks assigned by your care team will appear here.")
-    state.today.forEach { task ->
+    state.today.sortedBy { it.status == "COMPLETED" }.forEach { task ->
         InfoCard(task.title, "${task.due_time} · ${label(task.task_type)}") {
-            StatusPill(task.status); Text(task.instruction)
+            if (task.status == "COMPLETED") CompletedMark("Completed") else StatusPill(task.status)
+            Text(task.instruction)
             task.recorded_value?.let { Text("Recorded: $it ${task.target_unit.orEmpty()}") }
             task.patient_note?.let { Text(it) }
             if (task.medication_source?.get("outdated") == true) Text("Prescription updated. Contact your care team before recording this task.", color = MaterialTheme.colorScheme.error)
@@ -27,6 +36,7 @@ import com.example.domain.model.Role
             }
         }
     }
+    if (patient) MeasurementEntrySection(vm, state)
     if (!patient && vm.user.role == Role.DOCTOR) {
         if (state.care.plan == null) Button(onClick = { vm.action("Care plan created") { vm.api.createPlan(requireNotNull(state.patientId), mapOf("start_date" to todayIndia())); vm.reloadCare() } }, enabled = !state.busy) { Text("Create care plan") }
         else {
@@ -88,7 +98,7 @@ import com.example.domain.model.Role
     var schedule by remember { mutableStateOf(CareSchedule.from(existing)) }
     InfoCard(if (existing == null) "New care task" else "Revise care task", "Times and dates use India Standard Time. Medication and insulin tasks require a current prescription item.") {
         if (changed) Text("The care plan changed in another app. Close this editor and review the updated plan before making changes.", color = MaterialTheme.colorScheme.error)
-        ChoiceRow(listOf("MEASUREMENT", "ACTIVITY", "MEDICATION", "INSULIN"), kind, { kind = it }, enabled)
+        DropdownChoice("Task type", listOf("MEASUREMENT", "ACTIVITY", "MEDICATION", "INSULIN"), kind, { kind = it }, enabled)
         Field("Title", title, { title = it }, enabled); Field("Instruction", instruction, { instruction = it }, enabled, 2)
         Field("Scheduled time (HH:MM)", time, { time = it }, enabled)
         Field(if (existing == null) "Start date (YYYY-MM-DD)" else "Effective date (YYYY-MM-DD)", date, { date = it }, enabled)
@@ -108,7 +118,7 @@ import com.example.domain.model.Role
         Field("Response window before (minutes)", schedule.before, { schedule = schedule.copy(before = it) }, enabled)
         Field("Response window after (minutes)", schedule.after, { schedule = schedule.copy(after = it) }, enabled)
         Field("Expected duration (optional, minutes)", schedule.duration, { schedule = schedule.copy(duration = it) }, enabled)
-        Row { Checkbox(schedule.reminder, { schedule = schedule.copy(reminder = it) }, enabled = enabled); Text("Enable task reminders") }
+        Row { Checkbox(schedule.reminder, { schedule = schedule.copy(reminder = it) }, enabled = enabled); Text("Send scheduled alert (set by assigned doctor)") }
         if (kind == "MEASUREMENT") {
             ChoiceRow(listOf("GLUCOSE", "WEIGHT", "TEMPERATURE", "PULSE", "SPO2"), observation, { observation = it; unit = mapOf("GLUCOSE" to "mg/dL", "WEIGHT" to "kg", "TEMPERATURE" to "°C", "PULSE" to "bpm", "SPO2" to "%")[it].orEmpty(); timing = if (it == "GLUCOSE") "FASTING" else "SCHEDULED" }, enabled)
             Field("Timing relation", timing, { timing = it }, enabled); Field("Unit", unit, { unit = it }, enabled)
@@ -150,7 +160,7 @@ import com.example.domain.model.Role
     }
     if (records.isEmpty() && state.timeline.none { it.task_type == recordType || it.observation?.observation_type == recordType }) EmptyCard("No entries yet", "Your recorded history will appear here.")
     PagedRows(records) { row -> InfoCard(if (row.record_type == "ACTIVITY") row.activity_name.orEmpty() else label(row.record_type), displayDate(row.observed_at)) {
-        if (row.record_type == "ACTIVITY") Text("${row.duration_minutes} minutes")
+        if (row.record_type == "ACTIVITY") CompletedMark("${row.duration_minutes} minutes completed")
         else Text("${row.numeric_value ?: "—"}${row.secondary_numeric_value?.let { " / $it" }.orEmpty()} ${row.unit.orEmpty()}", style = MaterialTheme.typography.titleLarge)
         row.timing_context?.let { Text(label(it)) }; row.patient_note?.let { Text(it) }
         Text("Patient recorded", style = MaterialTheme.typography.labelSmall)
@@ -182,22 +192,31 @@ internal fun trendSeries(type: String, records: List<SelfRecord>, timeline: List
     }
 }
 
+private val activityTypes = listOf("Walking", "Running", "Cycling", "Swimming", "Yoga", "Gym", "Badminton", "Other activity")
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable private fun MeasurementEntrySection(vm: PortalViewModel, state: PortalState) {
-    var adding by remember { mutableStateOf(false) }
-    OutlinedButton(onClick = { adding = !adding }, enabled = !state.busy) {
-        Text(if (adding) "Close entry" else "Log measurement or activity")
+    var type by remember { mutableStateOf("") }
+    var activity by remember { mutableStateOf("Walking") }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        DropdownChoice("Vitals", listOf("GLUCOSE", "BLOOD_PRESSURE", "WEIGHT", "TEMPERATURE", "PULSE", "SPO2"), if (type == "ACTIVITY") "" else type, { type = it }, !state.busy)
+        DropdownChoice("Log activity", activityTypes, if (type == "ACTIVITY") activity else "", { activity = it; type = "ACTIVITY" }, !state.busy)
     }
-    if (adding) SelfRecordForm(vm, state)
+    Text("Medication times and alerts are set by your assigned doctor.", style = MaterialTheme.typography.bodySmall)
+    if (type.isNotEmpty()) {
+        key(type, activity) { SelfRecordForm(vm, state, type, activity) }
+        TextButton(onClick = { type = "" }, enabled = !state.busy) { Text("Close entry") }
+    }
 }
 
-@Composable private fun SelfRecordForm(vm: PortalViewModel, state: PortalState) {
-    var type by remember { mutableStateOf("GLUCOSE") }; var first by remember { mutableStateOf("") }; var second by remember { mutableStateOf("") }
-    var timing by remember { mutableStateOf("FASTING") }; var note by remember { mutableStateOf("") }; var activity by remember { mutableStateOf("Walking") }
+@Composable private fun SelfRecordForm(vm: PortalViewModel, state: PortalState, initialType: String = "GLUCOSE", initialActivity: String = "Walking") {
+    var type by remember { mutableStateOf(initialType) }; var first by remember { mutableStateOf("") }; var second by remember { mutableStateOf("") }
+    var timing by remember { mutableStateOf("FASTING") }; var note by remember { mutableStateOf("") }; var activity by remember { mutableStateOf(initialActivity) }
     LaunchedEffect(state.message) { if (state.message == "Record saved") { first = ""; second = ""; note = "" } }
     val units = mapOf("GLUCOSE" to "mg/dL", "BLOOD_PRESSURE" to "mmHg", "WEIGHT" to "kg", "TEMPERATURE" to "°C", "PULSE" to "bpm", "SPO2" to "%")
     InfoCard("Add your record", "Saved as patient reported data, with the current time.") {
-        ChoiceRow(units.keys.toList() + "ACTIVITY", type, { type = it; first = ""; second = "" }, !state.busy)
-        if (type == "ACTIVITY") { Field("Activity", activity, { activity = it }, !state.busy); Field("Duration (minutes)", first, { first = it }, !state.busy) }
+        DropdownChoice("Record type", units.keys.toList() + "ACTIVITY", type, { type = it; first = ""; second = "" }, !state.busy)
+        if (type == "ACTIVITY") { DropdownChoice("Activity", activityTypes, activity, { activity = it }, !state.busy); Field("Duration (minutes)", first, { first = it }, !state.busy) }
         else {
             if (type == "GLUCOSE") ChoiceRow(listOf("FASTING", "AFTER_BREAKFAST", "AFTER_LUNCH", "POST_DINNER", "RANDOM"), timing, { timing = it }, !state.busy)
             Field(if (type == "BLOOD_PRESSURE") "Systolic (mmHg)" else "Value (${units[type]})", first, { first = it }, !state.busy)
@@ -275,4 +294,54 @@ internal data class CareSchedule(
         }
     }
     companion object { fun from(task: CareTask?) = task?.let { CareSchedule(it.frequency_type, it.weekdays_mask ?: 0, (it.interval_days ?: 2).toString(), it.one_time_date ?: todayIndia(), it.end_date.orEmpty(), it.window_before_minutes.toString(), it.window_after_minutes.toString(), it.expected_duration_minutes?.toString().orEmpty(), it.reminder_enabled == true || it.reminder_enabled == 1 || it.reminder_enabled == 1.0) } ?: CareSchedule() }
+}
+
+
+internal data class CareCompletion(val total: Int, val completed: Int) {
+    val allCompleted: Boolean get() = total > 0 && completed == total
+}
+internal fun careCompletion(statuses: List<String>) = CareCompletion(statuses.size, statuses.count { it == "COMPLETED" })
+
+@Composable internal fun CompletedMark(text: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(Icons.Outlined.CheckCircle, contentDescription = "Completed", tint = Color(0xFF15803D))
+        Text(text, color = Color(0xFF15803D))
+    }
+}
+
+@Composable internal fun CareCompletionCard(tasks: List<CareOccurrence>) {
+    val progress = careCompletion(tasks.map { it.status })
+    if (progress.total == 0) return
+    val ratio = progress.completed.toFloat() / progress.total
+    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = if (progress.allCompleted) Color(0xFF15553B) else MaterialTheme.colorScheme.primary)) {
+        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Text(if (progress.allCompleted) "A good day for your care" else "A little progress, every day", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = .85f))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f)) {
+                    Text("${progress.completed} / ${progress.total}", fontSize = 38.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text(if (progress.allCompleted) "All your care tasks are complete." else "care tasks completed today", style = MaterialTheme.typography.bodySmall, color = Color.White)
+                }
+                Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(progress = { ratio }, modifier = Modifier.fillMaxSize(), color = Color(0xFFD3E9C5), trackColor = Color.White.copy(alpha = .15f), strokeWidth = 5.dp)
+                    if (progress.allCompleted) Icon(Icons.Outlined.CheckCircle, "All care tasks completed", tint = Color.White)
+                    else Text("${(ratio*100).toInt()}%", style = MaterialTheme.typography.labelLarge, color = Color.White)
+                }
+            }
+            LinearProgressIndicator(progress = { ratio }, modifier = Modifier.fillMaxWidth(), color = Color(0xFFD3E9C5), trackColor = Color.White.copy(alpha = .15f))
+            Text(if (progress.allCompleted) "Your care team can see your progress." else "Your assigned care, one step at a time.", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = .85f))
+        }
+    }
+}
+
+@Composable internal fun DropdownChoice(title: String, choices: List<String>, selected: String, onSelect: (String) -> Unit, enabled: Boolean = true) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(onClick = { open = true }, enabled = enabled) {
+            Text(if (selected.isBlank()) title else "$title: ${label(selected)}")
+            Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            choices.forEach { choice -> DropdownMenuItem(text = { Text(label(choice)) }, onClick = { onSelect(choice); open = false }) }
+        }
+    }
 }

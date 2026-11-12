@@ -27,7 +27,7 @@ import com.example.domain.model.User
             val groups = if (user.role == Role.ADMIN) listOf(
                 "Reception" to listOf("Overview", "Appointments", "Patients"),
                 "Administration" to listOf("Doctor schedules", "Staff", "Audit trail")
-            ) else listOf("Clinical work" to listOf("Live queue", "Patient records", "Appointments", "Lab workflow"))
+            ) else listOf("Clinical work" to listOf("Patients", "Live queue", "Patient records", "Appointments", "Lab workflow"))
             (groups + ("Account" to listOf("Notifications", "Profile"))).forEach { (section, options) ->
                 val visible = options.filter { it in destinations }
                 if (visible.isNotEmpty()) {

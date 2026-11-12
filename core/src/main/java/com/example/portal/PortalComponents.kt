@@ -1,5 +1,7 @@
 package com.example.portal
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -56,8 +58,8 @@ fun validDate(value: String): Boolean = runCatching {
     }
 }
 @Composable fun InfoCard(title: String, subtitle: String? = null, content: @Composable ColumnScope.() -> Unit = {}) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(22.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             content()
@@ -91,7 +93,7 @@ fun validDate(value: String): Boolean = runCatching {
 }
 @Composable fun Field(label: String, value: String, onChange: (String) -> Unit, enabled: Boolean = true, lines: Int = 1) {
     OutlinedTextField(value = value, onValueChange = onChange, label = { Text(label) }, enabled = enabled,
-        singleLine = lines == 1, minLines = lines, modifier = Modifier.fillMaxWidth())
+        singleLine = lines == 1, minLines = lines, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
 }
 @Composable fun ConfirmAction(title: String, explanation: String, confirm: String, onCancel: () -> Unit, onConfirm: () -> Unit) {
     AlertDialog(onDismissRequest = onCancel, title = { Text(title) }, text = { Text(explanation) },

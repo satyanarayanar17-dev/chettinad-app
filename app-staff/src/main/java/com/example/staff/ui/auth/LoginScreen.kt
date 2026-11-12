@@ -1,148 +1,55 @@
 package com.example.staff.ui.auth
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.staff.R
 import com.example.ui.components.AppLogo
 import com.example.domain.model.Role
+import com.example.portal.PrivacyAndSupport
 
 @Composable
-fun LoginScreen(
-    uiState: AuthUiState,
-    onLogin: (String, String) -> Unit,
-    onLoginSuccess: (Role) -> Unit,
-    onErrorDismiss: () -> Unit
-) {
+fun LoginScreen(uiState: AuthUiState, onLogin: (String, String) -> Unit,
+    onLoginSuccess: (Role) -> Unit, onErrorDismiss: () -> Unit) {
     var username by remember { mutableStateOf("") }
-    var pin by remember { mutableStateOf("") }
-
-    // Navigate when user is successfully logged in
-    LaunchedEffect(uiState.user) {
-        uiState.user?.let { user ->
-            onLoginSuccess(user.role)
-        }
-    }
-
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
-    ) {
-        Box(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 32.dp)
-                    .align(Alignment.Center),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                AppLogo(
-                    modifier = Modifier.width(220.dp).height(76.dp)
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-                Text(
-                    text = "Chettinad Care Staff",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = "Clinical Care. Connected.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(48.dp))
-                
-                Text(
-                    text = "Secure Clinical Access",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.align(Alignment.Start)
-                )
-                
-                Spacer(modifier = Modifier.height(16.dp))
-
-                OutlinedTextField(
-                    value = username,
-                    onValueChange = { username = it },
-                    label = { Text("Staff ID / Username") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    enabled = !uiState.isLoading,
-                    shape = MaterialTheme.shapes.medium
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(
-                    value = pin,
-                    onValueChange = { pin = it },
-                    label = { Text("Password / Secure PIN") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    enabled = !uiState.isLoading,
-                    shape = MaterialTheme.shapes.medium
-                )
-                Spacer(modifier = Modifier.height(32.dp))
-                Button(
-                    onClick = { onLogin(username, pin) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    enabled = !uiState.isLoading && username.isNotBlank() && pin.isNotBlank(),
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    if (uiState.isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    } else {
-                        Text("Sign In")
-                    }
-                }
-                
-                if (uiState.error != null) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = uiState.error,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center
-                    )
-                }
+    var password by remember { mutableStateOf("") }
+    LaunchedEffect(uiState.user) { uiState.user?.let { onLoginSuccess(it.role) } }
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(
+            Modifier.fillMaxSize().safeDrawingPadding().imePadding()
+                .verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            AppLogo(Modifier.width(220.dp).height(76.dp))
+            Text("Chettinad Care Staff", style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
+            Text("Clinical Care. Connected.", style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.height(12.dp))
+            Text("Secure Clinical Access", style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.align(Alignment.Start))
+            OutlinedTextField(username, { username = it }, label = { Text("Staff ID / Username") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true, enabled = !uiState.isLoading)
+            OutlinedTextField(password, { password = it }, label = { Text("Password") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true, enabled = !uiState.isLoading,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+            Button(onClick = { onLogin(username, password) }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                enabled = !uiState.isLoading && username.isNotBlank() && password.isNotBlank()) {
+                if (uiState.isLoading) CircularProgressIndicator(Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
+                else Text("Sign In")
             }
-            
-            // Footer
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Chettinad Hospital and Research Institute",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "Chettinad Health City",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                )
-            }
+            uiState.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            Text("Chettinad Hospital and Research Institute", style = MaterialTheme.typography.labelMedium)
+            PrivacyAndSupport()
         }
     }
 }

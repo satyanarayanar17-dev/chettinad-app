@@ -20,6 +20,7 @@ import org.junit.Test
 
 class FakeDoctorRepositoryConflict : DoctorRepository(
     apiService = object : ChettinadApiService {
+        override suspend fun accessConfiguration() = com.example.data.api.AccessConfiguration(false, true, true)
         // Implement only what's needed for the test, or throw
         override suspend fun loginStaff(credentials: Map<String, String>) = throw NotImplementedError()
         override suspend fun requestOtp(payload: Map<String, String>) = throw NotImplementedError()

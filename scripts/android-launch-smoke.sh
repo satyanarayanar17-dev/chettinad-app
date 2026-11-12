@@ -23,7 +23,7 @@ for kind in patient staff; do
     action="Send code"
   else
     title="Chettinad Care Staff"
-    field="Password / Secure PIN"
+    field="Password"
     action="Sign In"
   fi
   adb shell am force-stop "$package"

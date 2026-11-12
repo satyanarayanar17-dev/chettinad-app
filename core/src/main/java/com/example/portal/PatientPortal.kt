@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import com.example.ui.components.AppLogo
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
@@ -26,28 +27,28 @@ import androidx.compose.ui.platform.LocalContext
     LaunchedEffect(state.today, state.care, state.errors) { CareReminders.schedule(context, reminderTasks(state)) }
     var tab by remember { mutableStateOf("Home") }
     var more by remember { mutableStateOf(false) }
-    val primary = listOf("Home" to Icons.Outlined.Home, "Care plan" to Icons.Outlined.Checklist,
-        "Appointments" to Icons.Outlined.CalendarMonth, "Records" to Icons.Outlined.Folder, "More" to Icons.Outlined.MoreHoriz)
+    val primary = listOf("Home" to Icons.Outlined.Home, "Care plan" to Icons.Outlined.FavoriteBorder,
+        "Records" to Icons.Outlined.FolderOpen, "Profile" to Icons.Outlined.PersonOutline)
     BackHandler(tab != "Home") { tab = "Home" }
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Chettinad Care", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) },
+        topBar = { TopAppBar(title = { AppLogo(Modifier.width(136.dp).height(44.dp)) }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
             actions = { TextButton(onClick = vm::refresh, enabled = !state.loading && !state.busy) { Text("Refresh") } }) },
         bottomBar = { NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) { primary.forEach { (name, icon) ->
-            NavigationBarItem(selected = if (name == "More") tab in listOf("Queue", "Trends", "Profile", "Notifications") else tab == name,
-                onClick = { if (!state.busy) { if (name == "More") more = true else tab = name } },
-                icon = { Icon(icon, contentDescription = name) }, label = { Text(if (name == "Appointments") "Visits" else name, maxLines = 1) })
+            NavigationBarItem(selected = if (name == "Profile") tab in listOf("Queue", "Trends", "Profile", "Notifications", "Appointments") else tab == name,
+                onClick = { if (!state.busy) { tab = name } },
+                icon = { Icon(icon, contentDescription = name) }, label = { Text(if (name == "Home") "Today" else if (name == "Profile") "You" else name, maxLines = 1) })
         } } }
     ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             when (tab) {
                 "Home" -> {
                     PageHeading("Hello, ${user.name.substringBefore(' ')}", "Your care, connected.")
                     ErrorCards(state, setOf("appointments", "today"), vm::refresh)
                     val next = state.appointments.filter { it.status in setOf("PENDING_CONFIRMATION", "CONFIRMED", "CHECKED_IN") }.minByOrNull { it.scheduled_at }
-                    if (next == null) EmptyCard("Your next appointment", "Book a visit when you need to see your care team.")
+                    if (next == null) EmptyCard("Your next appointment", "Visits scheduled by your care team appear here.")
                     else InfoCard("Your next appointment", "${next.doctor_name ?: "Care team"} · ${displayDate(next.scheduled_at)}") { StatusPill(next.status); Text(next.reason.orEmpty()) }
-                    Button(onClick = { tab = "Appointments" }, modifier = Modifier.fillMaxWidth()) { Text("Book an appointment") }
-                    InfoCard("Today's care plan", "${state.today.count { it.status in setOf("COMPLETED", "RECORDED", "TAKEN") }} of ${state.today.size} tasks completed") {
+                    CareCompletionCard(state.today)
+                    InfoCard("Today's care plan", "${careCompletion(state.today.map { it.status }).completed} of ${state.today.size} tasks completed") {
                         state.today.take(3).forEach { Text("${it.due_time} · ${it.title} · ${label(it.status)}") }
                         TextButton(onClick = { tab = "Care plan" }) { Text("View today's tasks") }
                     }
@@ -60,8 +61,12 @@ import androidx.compose.ui.platform.LocalContext
                 "Care plan" -> CarePlanPage(vm, state, patient = true)
                 "Queue" -> QueuePatientPage(state, vm::refresh)
                 "Records" -> RecordsPage(vm, state, uploadAllowed = true)
-                "Trends" -> TrendsPage(vm, state)
-                "Profile" -> ProfilePage(vm, state, onLogout)
+                "Trends" -> { TextButton(onClick = { tab = "Profile" }) { Text("Back to your account") }; TrendsPage(vm, state) }
+                "Profile" -> {
+                    PageHeading("Your account", user.name)
+                    ChoiceRow(listOf("Profile", "Appointments", "Trends", "Notifications", "Queue"), "Profile", { tab = it }, !state.busy)
+                    ProfilePage(vm, state, onLogout)
+                }
                 "Notifications" -> NotificationsPage(vm, state)
             }
         }
@@ -77,32 +82,21 @@ import androidx.compose.ui.platform.LocalContext
 }
 
 @Composable fun AppointmentPage(vm: PortalViewModel, state: PortalState, staff: Boolean = false) {
-    var booking by remember { mutableStateOf(false) }
-    var cancel by remember { mutableStateOf<Appointment?>(null) }
-    var checkIn by remember { mutableStateOf<Appointment?>(null) }
-    PageHeading("Appointments", if (staff) "Requests, arrivals and upcoming visits." else "Plan your next visit with the care team.")
-    ErrorCards(state, setOf("appointments", "directory", "slots"), vm::refresh)
-    if (!staff || vm.user.role == com.example.domain.model.Role.ADMIN) Button(onClick = { vm.clearMessage(); booking = true }, enabled = !state.busy) {
-        Icon(Icons.Outlined.Add, contentDescription = null)
-        Spacer(Modifier.width(8.dp))
-        Text("Book an appointment")
-    }
-    if (booking) AppointmentBooking(vm, state, staff, onClose = { booking = false })
-    if (state.appointments.isEmpty() && "appointments" !in state.errors) EmptyCard("No appointments yet", "Your booked visits will appear here.")
+    PageHeading("Visits", if (staff) "Check in arrivals and view scheduled visits." else "Your visits with the care team.")
+    ErrorCards(state, setOf("appointments"), vm::refresh)
+    if (state.appointments.isEmpty() && "appointments" !in state.errors) EmptyCard("No visits yet", "Visits scheduled by your care team appear here.")
     PagedRows(state.appointments.sortedByDescending { it.scheduled_at }) { appointment ->
         InfoCard(if (staff) appointment.patient_name ?: "Patient" else appointment.doctor_name ?: "Care team", displayDate(appointment.scheduled_at)) {
             StatusPill(appointment.status)
             Text(listOfNotNull(appointment.department_name, appointment.reason).joinToString(" · "))
-            if (staff && vm.user.role != com.example.domain.model.Role.NURSE && appointment.status == "PENDING_CONFIRMATION") Button(onClick = { vm.appointment(appointment, "confirm") }, enabled = !state.busy) { Text("Confirm request") }
-            if (staff && vm.user.role != com.example.domain.model.Role.NURSE && appointment.status == "CONFIRMED") Button(onClick = { checkIn = appointment }, enabled = !state.busy) { Text("Check in patient") }
-            if ((!staff || vm.user.role == com.example.domain.model.Role.ADMIN) && appointment.status in setOf("CONFIRMED", "PENDING_CONFIRMATION")) {
-                TextButton(onClick = { cancel = appointment }, enabled = !state.busy) { Text("Cancel appointment") }
-                RescheduleForm(vm, state, appointment)
+            if (staff) Text("MRN ${appointment.mrn.orEmpty()}")
+            val today = runCatching { java.time.Instant.parse(appointment.scheduled_at).atZone(java.time.ZoneId.of("Asia/Kolkata")).toLocalDate().toString() == todayIndia() }.getOrDefault(false)
+            if (staff && vm.user.role in setOf(com.example.domain.model.Role.ADMIN, com.example.domain.model.Role.DOCTOR) && appointment.status in setOf("PENDING_CONFIRMATION", "CONFIRMED") && today) {
+                Text("Verify the patient name and MRN, then check in.", style = MaterialTheme.typography.bodySmall)
+                Button(onClick = { vm.appointment(appointment, "check-in") }, enabled = !state.busy) { Text("Check in patient") }
             }
         }
     }
-    checkIn?.let { appointment -> ConfirmAction("Verify patient identity", "Confirm this patient’s name and hospital identity against the appointment before checking in: ${appointment.patient_name.orEmpty()} · ${appointment.mrn.orEmpty()}.", "Identity verified · Check in", { checkIn = null }, { vm.appointment(appointment, "check-in"); checkIn = null }) }
-    cancel?.let { appointment -> ConfirmAction("Cancel this appointment?", "${appointment.doctor_name.orEmpty()} · ${displayDate(appointment.scheduled_at)}", "Cancel appointment", { cancel = null }) { vm.appointment(appointment, "cancel"); cancel = null } }
 }
 
 @Composable private fun RescheduleForm(vm: PortalViewModel, state: PortalState, appointment: Appointment) {

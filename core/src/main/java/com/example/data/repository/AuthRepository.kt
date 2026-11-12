@@ -20,7 +20,8 @@ import kotlinx.coroutines.flow.StateFlow
 open class AuthRepository(
     private val apiService: ChettinadApiService,
     private val tokenManager: TokenManager,
-    private val cookieJar: PersistentCookieJar
+    private val cookieJar: PersistentCookieJar,
+    private val requireLivePatientAccess: Boolean = com.example.core.BuildConfig.FLAVOR == "production"
 ) {
     private val sessionMutex = Mutex()
     val currentUser: StateFlow<User?> = tokenManager.sessionUser
@@ -29,6 +30,7 @@ open class AuthRepository(
         val epoch = tokenManager.beginSession()
         cookieJar.clear()
         try {
+            verifyBackendPolicy()
             val response = apiService.loginStaff(credentials)
             if (!tokenManager.saveTokenForSession(epoch, response.access_token)) throw SessionChangedException()
             
@@ -53,6 +55,7 @@ open class AuthRepository(
     }
     
     open suspend fun requestPatientOtp(phone: String): Result<OtpRequestResponse> = try {
+        verifyBackendPolicy()
         Result.success(apiService.requestOtp(mapOf("phone" to phone)))
     } catch (e: CancellationException) {
         throw e
@@ -69,6 +72,7 @@ open class AuthRepository(
         val epoch = tokenManager.beginSession()
         cookieJar.clear()
         try {
+            verifyBackendPolicy()
             val payload = mutableMapOf<String, Any>("phone" to phone, "code" to code)
             challengeId?.let { payload["challenge_id"] = it }
             profile?.let { payload["profile"] = it }
@@ -100,6 +104,14 @@ open class AuthRepository(
                 .fromJson(error.response()?.errorBody()?.string().orEmpty())?.error?.code
         }.getOrNull()
         return PatientAuthException(code ?: "HTTP_${error.code()}", error)
+    }
+
+    private suspend fun verifyBackendPolicy() {
+        if (!requireLivePatientAccess) return
+        val configuration = apiService.accessConfiguration()
+        if (configuration.demo_otp || !configuration.sms_available || !configuration.doctor_registration_required) {
+            throw PatientAuthException("LIVE_ACCESS_NOT_READY")
+        }
     }
 
     open suspend fun logout(): Result<Unit> = sessionMutex.withLock {

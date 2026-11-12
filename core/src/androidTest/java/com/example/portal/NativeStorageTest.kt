@@ -18,12 +18,16 @@ class NativeStorageTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     @Test fun encryptedSessionSurvivesRecreationAndLogoutClearsAccess() {
         val first = TokenManager(context)
+        val documents = java.io.File(context.cacheDir, "medical-documents").apply { mkdirs() }
+        java.io.File(documents, "synthetic-report.pdf").writeText("synthetic report")
         first.saveToken("synthetic-jwt"); first.saveUser(User("patient-1", "Synthetic", Role.PATIENT))
         first.saveDraft("doctor-a", "encounter-a", "synthetic draft")
         val restored = TokenManager(context)
         assertEquals("synthetic-jwt", restored.getToken()); assertEquals("patient-1", restored.getUser()?.id)
         assertNull(restored.getDraft("doctor-b", "encounter-a"))
         restored.clear(); assertNull(TokenManager(context).getToken()); assertNull(TokenManager(context).getUser())
+        assertFalse(documents.exists())
+        assertEquals("synthetic draft", TokenManager(context).getDraft("doctor-a", "encounter-a"))
     }
     @Test fun refreshCookieRetainsOriginSecureExpiryAndPath() {
         val jar = PersistentCookieJar(context); jar.clear()

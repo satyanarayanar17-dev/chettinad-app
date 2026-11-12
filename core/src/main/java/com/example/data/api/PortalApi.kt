@@ -16,7 +16,9 @@ interface PortalApi {
     @GET("opd/queue") suspend fun queue(): List<QueuePatient>
     @GET("opd/patients/{id}/record") suspend fun record(@Path("id") id: String): ClinicalBundle
     @GET("opd/patients") suspend fun patients(@Query("search") query: String, @Query("limit") limit: Int = 100): List<PatientProfile>
-    @POST("opd/patients") suspend fun createPatient(@Body profile: Map<String, String>): PatientProfile
+    @POST("opd/patients") suspend fun createPatient(@Body profile: Map<String, @JvmSuppressWildcards Any>): PatientProfile
+    @POST("opd/patients/{id}/check-in") suspend fun startVisit(@Path("id") id: String, @Body data: Map<String, Boolean>): QueuePatient
+    @PATCH("opd/patients/{id}/access") suspend fun patientAccess(@Path("id") id: String, @Body data: Map<String, @JvmSuppressWildcards Any>): Map<String, Any?>
     @PATCH("opd/patients/{id}") suspend fun updateProfile(@Path("id") id: String, @Body data: Map<String, @JvmSuppressWildcards Any>): Map<String, Any?>
     @GET("opd/notifications") suspend fun notifications(@Query("limit") limit: Int = 100, @Query("offset") offset: Int = 0): List<Notice>
     @POST("opd/notifications/read") suspend fun readNotifications(): Map<String, Any?>
@@ -58,7 +60,7 @@ data class PatientProfile(
     val address: String? = null, val city: String? = null, val state: String? = null,
     val pin_code: String? = null, val emergency_contact: String? = null,
     val preferred_language: String? = null, val allergies: String? = null,
-    val allergy_review_status: String? = null
+    val allergy_review_status: String? = null, val assigned_doctor_id: String? = null, val portal_access_enabled: Int = 1
 )
 data class Department(val id: String, val name: String, val prefix: String = "")
 data class Doctor(val id: String, val name: String, val department: String? = null, val schedules: List<DoctorSchedule> = emptyList())

@@ -39,6 +39,8 @@ data class PortalState(
 }
 
 class PortalViewModel(val api: PortalApi, val user: User, private val tokens: TokenManager) : ViewModel() {
+    internal fun documentSession() = tokens.requestContext().generation
+    internal fun withDocumentSession(epoch: Long, action: () -> Unit) = tokens.ifCurrent(epoch, action)
     private val _state = MutableStateFlow(PortalState())
     val state = _state.asStateFlow()
     private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
@@ -220,7 +222,13 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
         val body = mutableMapOf<String, Any>("__v" to appointment.__v)
         time?.let { body["scheduled_at"] = it }
         if (verb == "check-in") body["identity_verified"] = true
-        api.appointmentAction(appointment.id, verb, body); reloadAppointments(); reloadQueue()
+        try { api.appointmentAction(appointment.id, verb, body) }
+        catch (error: Exception) {
+            if (verb != "check-in") throw error
+            reloadAppointments()
+            if (_state.value.appointments.none { it.id == appointment.id && it.status == "CHECKED_IN" }) throw error
+        }
+        reloadAppointments(); reloadQueue()
     }
     fun adherence(task: CareOccurrence, status: String, value: Double?, note: String) = action("Care plan updated") {
         val body = mutableMapOf<String, Any>("__v" to task.__v, "date" to task.occurrence_date, "status" to status)
@@ -264,7 +272,7 @@ class PortalViewModel(val api: PortalApi, val user: User, private val tokens: To
         check(!state.draftConflict) { "Review the changed hospital record before saving or signing" }
         val patient = requireNotNull(state.record?.patient)
         require(patient.id == encounter.patient_id) { "Review the current patient record before signing" }
-        val write = ConsultationWrite(state.noteVersion, state.draft.forWrite(), requireNotNull(state.reviewedPatientVersion))
+        val write = ConsultationWrite(state.noteVersion, state.draft.forWrite().copy(follow_up = null), requireNotNull(state.reviewedPatientVersion))
         val result = if (complete) api.complete(encounter.encounter_id, write)
             else api.saveNote(encounter.encounter_id, write)
         _state.update { it.copy(noteVersion = result.__v, draftDirty = false, draftConflict = false, draftAvailable = false) }
@@ -304,6 +312,8 @@ fun errorMessage(error: Throwable): String {
     if (error is HttpException) {
         val body = runCatching { error.response()?.errorBody()?.string() }.getOrNull().orEmpty()
         val code = Regex("\\\"code\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"").find(body)?.groupValues?.get(1)
+        if (code == "PILOT_PATIENT_LIMIT") return "The 25-patient trial is full. Contact the trial administrator before enrolling another patient."
+        if (code == "PILOT_DOCTOR_ONLY") return "This trial is restricted to its assigned doctor. Contact the trial administrator."
         if (code in setOf("ALLERGY_WARNING", "DUPLICATE_MEDICATION")) {
             val envelope = runCatching { Moshi.Builder().add(KotlinJsonAdapterFactory()).build().adapter(ClinicalErrorEnvelope::class.java).fromJson(body) }.getOrNull()
             envelope?.error?.message?.let { return it }

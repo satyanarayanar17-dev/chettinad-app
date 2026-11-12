@@ -71,7 +71,7 @@ class AuthViewModel(
                         otpRequested = response.sent, challengeId = response.challenge_id,
                         expiresAt = System.currentTimeMillis() + response.expires_in * 1000L,
                         resendAt = System.currentTimeMillis() + response.retry_after * 1000L,
-                        demoCode = if (com.example.core.BuildConfig.DEBUG && com.example.core.BuildConfig.FLAVOR != "production") response.development_code else null,
+                        demoCode = if ((com.example.core.BuildConfig.DEBUG || com.example.core.BuildConfig.FLAVOR == "demo") && com.example.core.BuildConfig.FLAVOR != "production") response.development_code else null,
                         profileRequired = false,
                         error = if (response.sent) null else "Code could not be sent. Please try again.")
                 }
@@ -101,8 +101,7 @@ class AuthViewModel(
                     }
                 }.onFailure { error ->
                     _uiState.update { it.copy(isLoading = false,
-                        profileRequired = it.profileRequired ||
-                            (error as? PatientAuthException)?.code == "PROFILE_REQUIRED",
+                        profileRequired = false,
                         error = authMessage(error)) }
                 }
         }
@@ -113,10 +112,12 @@ class AuthViewModel(
     }
 
     private fun authMessage(error: Throwable): String = when ((error as? PatientAuthException)?.code) {
-        "PROFILE_REQUIRED" -> "Complete your details to register, then verify the same code."
+        "PROFILE_REQUIRED", "PATIENT_NOT_REGISTERED" -> "Ask your doctor to create your patient profile with this mobile number before signing in."
+        "PATIENT_ACCESS_DISABLED" -> "Ask your doctor to enable mobile access for your profile."
         "OTP_INVALID", "OTP_EXPIRED", "OTP_CHALLENGE_MISMATCH" -> "Code is invalid or expired. Check it or request a new code."
         "OTP_WAIT", "HTTP_429", "RATE_LIMITED" -> "Please wait before requesting another code."
         "SMS_NOT_CONFIGURED", "SMS_DELIVERY_FAILED" -> "SMS is unavailable. Please contact hospital reception."
+        "LIVE_ACCESS_NOT_READY" -> "Patient access is not ready. Please contact the hospital care team."
         "ACCOUNT_DISABLED" -> "Please contact hospital reception for help accessing your account."
         else -> "Unable to sign in. Check your connection and try again."
     }

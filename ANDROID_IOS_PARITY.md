@@ -1,5 +1,7 @@
 # Chettinad Care Android / iOS parity
 
+Historical report as of 17 October 2026. For the 12 November Android release and actual-patient trial activation requirements, see [PLAY_STORE_RELEASE.md](PLAY_STORE_RELEASE.md). The backend revision and verification claims below describe that earlier snapshot.
+
 Updated 17 October 2026. Work started 15 October 2026. This file supersedes the earlier Android gap matrices and integration reports for the Android source on this branch.
 
 ## Source of truth

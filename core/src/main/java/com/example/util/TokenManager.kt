@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /** Each application has its own Keystore-backed preferences and Linux sandbox. */
 class TokenManager(context: Context? = null) {
+    private val applicationContext = context?.applicationContext
     private val preferences = context?.let {
         EncryptedSharedPreferences.create(it, "chettinad_session", MasterKey.Builder(it)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
@@ -62,6 +63,7 @@ class TokenManager(context: Context? = null) {
     @Synchronized fun clear() {
         generation++
         accessToken = null
+        applicationContext?.let(PrivateClinicalFiles::clear)
         // Retain account-scoped encrypted clinical drafts for explicit recovery after sign-in.
         preferences?.edit()?.remove("token")?.remove("user")?.apply()
         _user.value = null; _isLoggedIn.value = false

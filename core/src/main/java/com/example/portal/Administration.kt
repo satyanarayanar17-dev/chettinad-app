@@ -3,8 +3,17 @@ package com.example.portal
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import com.example.data.api.*
+import com.example.domain.model.Role
 import com.example.address.BirthDateField
 import com.example.address.IndianAddressFields
 import com.example.address.validBirthDate
@@ -75,15 +84,62 @@ import com.example.address.validBirthDate
     }
 }
 
-@Composable fun PatientRegistration(vm: PortalViewModel, state: PortalState) {
+@Composable fun PatientRegistration(vm: PortalViewModel, state: PortalState, onOpen: (String, QueuePatient?) -> Unit = { _, _ -> }) {
     var search by remember { mutableStateOf("") }; var create by remember { mutableStateOf(false) }
-    PageHeading("Patient directory", "Search existing records before registering a patient.")
+    PageHeading(if (vm.user.role == Role.DOCTOR) "Your patients" else "Patient directory", if (vm.user.role == Role.DOCTOR) vm.user.name else "Search existing records before registering a patient.")
     ErrorCards(state, setOf("patients"), vm::refresh)
     Field("Search name, MRN or mobile", search, { search = it }, !state.busy)
     OutlinedButton(onClick = { vm.searchPatients(search) }, enabled = !state.busy && search.isNotBlank()) { Text("Find patient") }
-    PagedRows(state.patients) { patient -> InfoCard(patient.name, "${patient.mrn} · ${patient.phone}") }
+    LaunchedEffect(Unit) { vm.searchPatients("") }
     OutlinedButton(onClick = { create = !create }, enabled = !state.busy) { Text(if (create) "Close registration" else "Register new patient") }
+    if (!create) PagedRows(state.patients) { patient ->
+        var expanded by remember(patient.id) { mutableStateOf(false) }
+        var tasks by remember(patient.id) { mutableStateOf<List<CareOccurrence>?>(null) }
+        var progressError by remember(patient.id) { mutableStateOf(false) }
+        LaunchedEffect(patient.id, state.loading, state.message) {
+            if (vm.user.role == Role.DOCTOR) runCatching { vm.api.today(patient.id) }.onSuccess { tasks = it; progressError = false }.onFailure { progressError = true }
+        }
+        OutlinedCard(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+                        Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { Text(patient.name.split(" ").take(2).mapNotNull { it.firstOrNull() }.joinToString(""), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) }
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text(patient.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(patient.mrn, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ChevronRight, if (expanded) "Hide patient actions" else "Show patient actions", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (vm.user.role == Role.DOCTOR) {
+                    val progress = tasks?.let { careCompletion(it.map { task -> task.status }) }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (progress == null) { if (progressError) "Care progress unavailable" else "Loading care progress…" } else if (progress.total == 0) "Care plan not assigned" else "${progress.completed} of ${progress.total} care tasks", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                        if (progress?.allCompleted == true) Icon(Icons.Outlined.CheckCircle, "All care tasks completed", tint = Color(0xFF16754B))
+                    }
+                    if (progress != null && progress.total > 0) LinearProgressIndicator(progress = { progress.completed.toFloat() / progress.total }, modifier = Modifier.fillMaxWidth(), color = if (progress.allCompleted) Color(0xFF16754B) else MaterialTheme.colorScheme.primary)
+                }
+                if (expanded) {
+        Text(patient.phone, style = MaterialTheme.typography.bodyMedium)
+        Text(if (patient.portal_access_enabled == 1) "Mobile access enabled" else "Mobile access disabled")
+        if (vm.user.role == Role.DOCTOR) {
+            Button(onClick = { vm.action("Visit ready") {
+                val entry = vm.api.startVisit(patient.id, mapOf("identity_verified" to true))
+                onOpen(patient.id, entry)
+            } }, enabled = !state.busy) { Text("Start visit") }
+            Text("Check the patient's name and MRN. An existing open visit is resumed.", style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = { onOpen(patient.id, null) }, enabled = !state.busy) { Text("Care plan & records") }
+            TextButton(onClick = { vm.action("Mobile access updated") {
+                vm.api.patientAccess(patient.id, mapOf("portal_access_enabled" to (patient.portal_access_enabled != 1), "__v" to patient.__v))
+                vm.searchPatients(search)
+            } }, enabled = !state.busy) { Text(if (patient.portal_access_enabled == 1) "Disable mobile access" else "Enable mobile access") }
+        }
+                }
+            }
+        }
+    }
     if (create) {
+        var mobileAccess by remember { mutableStateOf(true) }
         var addressValid by remember { mutableStateOf(false) }
         val values = remember { mutableStateMapOf<String, String>() }; var gender by remember { mutableStateOf("Not specified") }
         InfoCard("Patient details", "Check the patient's identity and mobile before creating the record.") {
@@ -95,7 +151,9 @@ import com.example.address.validBirthDate
                 enabled = !state.busy, onValidityChange = { addressValid = it })
             Field("Emergency contact mobile", values["emergency_contact"].orEmpty(), { values["emergency_contact"] = it }, !state.busy)
             ChoiceRow(listOf("Female", "Male", "Other", "Not specified"), gender, { gender = it }, !state.busy)
-            Button(onClick = { vm.action("Patient registered") { vm.api.createPatient(values.toMap() + ("gender" to gender)); values.clear(); create = false } }, enabled = !state.busy && addressValid && listOf("name", "phone", "dob", "address", "city", "state", "pin_code", "emergency_contact").all { !values[it].isNullOrBlank() } && validBirthDate(values["dob"].orEmpty())) { Text("Register patient") }
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Checkbox(mobileAccess, { mobileAccess = it }, enabled = !state.busy); Text("Enable patient mobile sign-in") }
+            Text("The patient signs in with an OTP using the mobile number saved above.", style = MaterialTheme.typography.bodySmall)
+            Button(onClick = { vm.action("Patient registered") { vm.api.createPatient(values.toMap() + mapOf("gender" to gender, "portal_access_enabled" to mobileAccess)); values.clear(); create = false; vm.searchPatients(search) } }, enabled = !state.busy && addressValid && listOf("name", "phone", "dob", "address", "city", "state", "pin_code", "emergency_contact").all { !values[it].isNullOrBlank() } && validBirthDate(values["dob"].orEmpty())) { Text("Register patient") }
         }
     }
 }

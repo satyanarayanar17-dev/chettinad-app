@@ -51,7 +51,7 @@ class PortalVisualTest {
         compose.setContent { AppTheme(darkTheme = false) { PatientPortal(container, User("patient-1", "Anitha", Role.PATIENT)) {} } }
         compose.waitForIdle()
         compose.onNodeWithText("Hello, Anitha").assertIsDisplayed()
-        compose.onNodeWithText("3 of 6 tasks completed").assertIsDisplayed()
+        compose.onNodeWithText("1 of 6 tasks completed").assertIsDisplayed()
         java.io.File("build/qa").mkdirs()
         compose.onRoot().captureRoboImage("build/qa/patient-home.png")
     }
@@ -70,6 +70,7 @@ class PortalVisualTest {
         every { container.tokenManager } returns TokenManager()
         compose.setContent { AppTheme(darkTheme = false) { StaffPortal(container, User("doctor-1", "Dr. Priya", Role.DOCTOR, "Obstetrics & Gynaecology")) {} } }
         compose.waitForIdle()
+        compose.onNodeWithText("Queue", useUnmergedTree = false).performClick()
         compose.onNode(hasText("Live queue") and !hasAnyAncestor(hasTestTag("staff-menu"))).assertIsDisplayed()
         compose.onRoot().captureRoboImage("build/qa/staff-queue.png")
     }
@@ -86,11 +87,12 @@ class PortalVisualTest {
         compose.setContent { AppTheme { PatientPortal(container, User("patient-1", "Synthetic", Role.PATIENT)) {} } }
         compose.waitForIdle()
         compose.onNodeWithText("Log a measurement or activity").performScrollTo().performClick()
-        compose.onNodeWithText("Log measurement or activity").assertIsDisplayed().performClick()
-        compose.onNodeWithText("Add your record").assertIsDisplayed()
+        compose.onNodeWithText("Vitals").performScrollTo().performClick()
+        compose.onNodeWithText("Glucose").performClick()
+        compose.onNodeWithText("Add your record").performScrollTo().assertIsDisplayed()
         compose.onRoot().captureRoboImage("build/qa/patient-care-plan-entry.png")
-        compose.onNodeWithText("More").performClick()
-        compose.onNodeWithText("Trends").performClick()
+        compose.onNodeWithText("You").performClick()
+        compose.onNodeWithText("Trends").performScrollTo().performClick()
         compose.onNodeWithText("Health trends").assertIsDisplayed()
         compose.onNodeWithText("Log measurement or activity").assertDoesNotExist()
         compose.onNodeWithText("Add your record").assertDoesNotExist()

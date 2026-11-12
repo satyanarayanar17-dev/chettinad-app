@@ -63,8 +63,9 @@ import java.io.File
                 document.patient_note?.let { Text(it) }
                 Text("${document.original_filename} · ${document.size_bytes / 1024} KB", style = MaterialTheme.typography.bodySmall)
                 Button(onClick = { vm.action("Document opened") {
+                    val session = vm.documentSession()
                     val bytes = withContext(Dispatchers.IO) { vm.api.documentContent(requireNotNull(state.patientId), document.id).use { it.bytes() } }
-                    openPrivateDocument(context, document, bytes)
+                    openPrivateDocument(context, document, bytes, vm, session)
                 } }, enabled = !state.busy) { Text("Open document") }
                 if (uploadAllowed) {
                     var links by remember(document.id) { mutableStateOf(false) }
@@ -113,16 +114,22 @@ private fun java.io.InputStream.readBytesLimited(max: Int): ByteArray {
     while (true) { val count = read(buffer); if (count < 0) break; require(out.size() + count <= max) { "File exceeds 10 MB" }; out.write(buffer, 0, count) }
     return out.toByteArray()
 }
-private suspend fun openPrivateDocument(context: Context, document: PatientDocument, bytes: ByteArray) {
+private suspend fun openPrivateDocument(context: Context, document: PatientDocument, bytes: ByteArray, vm: PortalViewModel, session: Long) {
     val file = withContext(Dispatchers.IO) {
-        val dir = File(context.cacheDir, "medical-documents").apply { mkdirs() }
-        dir.listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 3600000 }?.forEach { it.delete() }
-        val ext = when (document.mime_type) { "application/pdf" -> ".pdf"; "image/png" -> ".png"; else -> ".jpg" }
-        File(dir, "document-${java.util.UUID.randomUUID()}$ext").apply { writeBytes(bytes) }
+        var result: File? = null
+        if (!vm.withDocumentSession(session) {
+            val dir = File(context.cacheDir, "medical-documents").apply { mkdirs() }
+            dir.listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 3600000 }?.forEach { it.delete() }
+            val ext = when (document.mime_type) { "application/pdf" -> ".pdf"; "image/png" -> ".png"; else -> ".jpg" }
+            result = File(dir, "document-${java.util.UUID.randomUUID()}$ext").apply { writeBytes(bytes) }
+        }) throw SessionChangedException()
+        requireNotNull(result)
     }
-    val uri = FileProvider.getUriForFile(context, "${context.packageName}.documents", file)
-    val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, document.mime_type).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    context.startActivity(Intent.createChooser(intent, "Open medical document"))
+    if (!vm.withDocumentSession(session) {
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.documents", file)
+        val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, document.mime_type).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        context.startActivity(Intent.createChooser(intent, "Open medical document"))
+    }) { file.delete(); throw SessionChangedException() }
 }
 private fun printPrescription(context: Context, patient: PatientProfile, rx: PrescriptionRecord) {
     fun esc(v: String?) = android.text.TextUtils.htmlEncode(v.orEmpty())
@@ -174,6 +181,7 @@ private fun printPrescription(context: Context, patient: PatientProfile, rx: Pre
         }
     }
     if (vm.user.role == Role.PATIENT) ReminderPreferences(state)
+    PrivacyAndSupport()
     Button(onClick = { logout = true }, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
     if (logout) ConfirmAction("Sign out?", "You will need to sign in again to access your records.", "Sign out", { logout = false }, { logout = false; onLogout() })
 }

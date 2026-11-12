@@ -95,4 +95,55 @@ class SharedBackendIntegrationTest {
         assertEquals(changed.id, nurse.selfRecords(profile.id).first().id)
         assertEquals(112.5, nurse.selfRecords(profile.id).first().numeric_value!!, 0.0)
     }
+    @Test fun `doctor onboarding visit prescription and completion sync between native clients`() = runBlocking {
+        val base = System.getenv("CC_SHARED_FIXTURE_BASE")
+        assumeTrue("Requires disposable clinical fixture", base == "http://127.0.0.1:3005/api/v1/")
+        val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+        fun client(token: String? = null): Retrofit = Retrofit.Builder().baseUrl(base!!)
+            .client(OkHttpClient.Builder().addInterceptor { chain ->
+                chain.proceed(chain.request().newBuilder().apply { token?.let { header("Authorization", "Bearer $it") } }.build())
+            }.build()).addConverterFactory(MoshiConverterFactory.create(moshi).withNullSerialization()).build()
+        val auth = client().create(ChettinadApiService::class.java)
+        suspend fun doctor(): PortalApi {
+            val login = auth.loginStaff(mapOf("username" to "dr_prabha", "password" to "ChettinadDemo2026!"))
+            return client(login.access_token).create(PortalApi::class.java)
+        }
+        val doctor = doctor(); val otherClient = doctor()
+        val phone = "900009" + (System.nanoTime() % 10000).toString().padStart(4,'0')
+        val profile = doctor.createPatient(mapOf("name" to "Synthetic Android Sync $phone", "phone" to phone, "dob" to "1990-06-15", "gender" to "Female",
+            "address" to "Synthetic address", "city" to "Chennai", "state" to "Tamil Nadu", "pin_code" to "600001", "emergency_contact" to "9000000099", "portal_access_enabled" to true))
+        assertEquals("dr_prabha",profile.assigned_doctor_id); assertEquals(1,profile.portal_access_enabled)
+        assertEquals(profile.id,otherClient.patients(phone).single().id)
+        val challenge = auth.requestOtp(mapOf("phone" to phone))
+        val session = auth.verifyOtp(mapOf("phone" to phone,"code" to requireNotNull(challenge.development_code),"challenge_id" to requireNotNull(challenge.challenge_id)))
+        val patient = client(session.access_token).create(PortalApi::class.java)
+        assertEquals(profile.id,patient.profile().id)
+        val visit = doctor.startVisit(profile.id,mapOf("identity_verified" to true))
+        assertEquals(profile.id,visit.patient_id); assertEquals(profile.name,visit.patient_name)
+        assertEquals(visit.encounter_id,otherClient.startVisit(profile.id,mapOf("identity_verified" to true)).encounter_id)
+        doctor.encounterAction(visit.encounter_id,"start",mapOf("__v" to visit.__v))
+        val catalogue = doctor.catalogues()
+        val note = ConsultationData(complaint="Synthetic sync check",history="Synthetic history",examination="Synthetic findings",assessment="Synthetic assessment",advice="Synthetic instructions only",
+            diagnosis_ids=listOf(catalogue.diagnoses.first().id), medications=listOf(Medication(catalogue.drugs.first().id,"1 tablet","Daily","3 days")))
+        doctor.complete(visit.encounter_id,ConsultationWrite(0,note.forWrite(),profile.__v))
+        assertEquals("AUTHORIZED",patient.record(profile.id).prescriptions.single().status)
+        val beforePlan = otherClient.carePlan(profile.id)
+        assertNull(beforePlan.plan); assertEquals(1,beforePlan.available_prescription_items.size)
+        val day = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).toString()
+        val time = "10:00"
+        doctor.createPlan(profile.id,mapOf("start_date" to day))
+        val tasks = listOf(
+            mapOf<String,Any>("task_type" to "MEDICATION","title" to "Synthetic prescribed medication","instruction" to "Take as prescribed","prescription_item_id" to beforePlan.available_prescription_items.single().id),
+            mapOf<String,Any>("task_type" to "ACTIVITY","title" to "Walking","instruction" to "Synthetic walking task"))
+        for (task in tasks) {
+            val version = requireNotNull(doctor.carePlan(profile.id).plan).__v
+            doctor.createTask(profile.id,mapOf("__v" to version,"task" to task + mapOf("frequency_type" to "DAILY","scheduled_time" to time,"start_date" to day,"window_before_minutes" to 1440,"window_after_minutes" to 1440,"reminder_enabled" to true)))
+        }
+        val due = patient.today(profile.id); assertEquals(2,due.size)
+        for (task in due) patient.recordAdherence(task.id,mapOf("__v" to task.__v,"date" to task.occurrence_date,"status" to if (task.task_type == "MEDICATION") "TAKEN" else "COMPLETED"))
+        assertTrue(careCompletion(patient.today(profile.id).map { it.status }).allCompleted)
+        assertTrue(careCompletion(otherClient.today(profile.id).map { it.status }).allCompleted)
+        assertEquals(setOf("TAKEN","COMPLETED"),otherClient.timeline(profile.id).map { it.status }.toSet())
+        println("SHARED_DOCTOR_FLOW patient=${profile.id} phone=$phone encounter=${visit.encounter_id} all_completed=true")
+    }
 }

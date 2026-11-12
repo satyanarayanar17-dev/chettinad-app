@@ -1,3 +1,5 @@
+import java.net.URI
+
 plugins {
   alias(libs.plugins.android.library)
   alias(libs.plugins.kotlin.compose)
@@ -32,12 +34,35 @@ android {
       if (prodUrl != null && (!prodUrl.startsWith("https://") || !prodUrl.endsWith("/api/v1/"))) {
         throw GradleException("PRODUCTION_API_URL must be an HTTPS URL ending in /api/v1/.")
       }
+      val producingRelease = gradle.startParameter.taskNames.any {
+        it.contains("Production", ignoreCase = true) && it.contains("Release", ignoreCase = true)
+      }
+      if (producingRelease && providers.gradleProperty("PILOT_BACKEND_APPROVED").orNull != "true") {
+        throw GradleException("Production release requires -PPILOT_BACKEND_APPROVED=true after verifying the live API, durable storage and real OTP delivery.")
+      }
+      val parsed = prodUrl?.let { URI(it) }
+      if (parsed != null && (parsed.host.isNullOrBlank() || parsed.userInfo != null || parsed.rawQuery != null || parsed.fragment != null)) {
+        throw GradleException("PRODUCTION_API_URL must have a real HTTPS host and no credentials, query or fragment.")
+      }
       buildConfigField("String", "API_BASE_URL", "\"${prodUrl ?: "https://production.placeholder/"}\"")
     }
   }
 
   defaultConfig {
     minSdk = 24
+    listOf("PRIVACY_POLICY_URL", "SUPPORT_URL").forEach { setting ->
+      val value = providers.gradleProperty(setting).orNull ?: System.getenv(setting) ?: ""
+      if (value.isNotBlank()) {
+        val uri = URI(value)
+        require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null) { "$setting must be a public HTTPS URL without credentials." }
+      }
+      if (gradle.startParameter.taskNames.any { it.contains("Production", true) && it.contains("Release", true) } && value.isBlank()) {
+        throw GradleException("$setting must be configured for production releases.")
+      }
+      buildConfigField("String", setting, "\"$value\"")
+    }
+    buildConfigField("String", "PUBLISHER_NAME", "\"Chettinad Medical Sciences\"")
+    buildConfigField("String", "SUPPORT_EMAIL", "\"satyanarayanr17@gmail.com\"")
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 

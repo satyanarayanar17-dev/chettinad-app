@@ -6,6 +6,9 @@ import retrofit2.http.*
 
 interface ChettinadApiService {
     // --- AUTHENTICATION ---
+    @GET("auth/opd/config")
+    suspend fun accessConfiguration(): AccessConfiguration
+
     @POST("auth/login/staff")
     suspend fun loginStaff(@Body credentials: Map<String, String>): LoginResponse
 
@@ -60,6 +63,12 @@ interface ChettinadApiService {
     @PATCH("opd/staff/{id}")
     suspend fun updateStaffStatus(@Path("id") staffId: String, @Body active: Map<String, Boolean>): Response<Unit>
 }
+
+data class AccessConfiguration(
+    val demo_otp: Boolean,
+    val sms_available: Boolean,
+    val doctor_registration_required: Boolean
+)
 
 // Response Models based on v2 actual API
 data class LoginResponse(
