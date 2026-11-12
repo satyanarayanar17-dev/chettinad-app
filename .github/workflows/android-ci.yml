@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: satyanarayanar17-dev/CHINAD123
-          ref: 2108aefb93eac79abeb5ce1aab6bfe8c760d6335
+          ref: 0b2068438d11f91ed540db3831e0659257b6c605
           path: shared-api
           sparse-checkout: |
             backend
@@ -116,7 +116,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: satyanarayanar17-dev/CHINAD123
-          ref: 2108aefb93eac79abeb5ce1aab6bfe8c760d6335
+          ref: 0b2068438d11f91ed540db3831e0659257b6c605
           sparse-checkout: |
             backend
             tests

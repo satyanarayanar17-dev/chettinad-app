@@ -12,7 +12,7 @@ Production login checks the server configuration before sending a phone number o
 
 ## Repeatable build and verification
 
-Use JDK 21, Android SDK 36 and Gradle 9.3.1. Run `gradle :core:testDemoDebugUnitTest :app-patient:testDemoDebugUnitTest :app-staff:testDemoDebugUnitTest :app-patient:lintDemoDebug :app-staff:lintDemoDebug`. CI also runs native Android 35 storage/launch tests and the web clinical journeys against backend commit `2108aefb93eac79abeb5ce1aab6bfe8c760d6335`.
+Use JDK 21, Android SDK 36 and Gradle 9.3.1. Run `gradle :core:testDemoDebugUnitTest :app-patient:testDemoDebugUnitTest :app-staff:testDemoDebugUnitTest :app-patient:lintDemoDebug :app-staff:lintDemoDebug`. CI also runs native Android 35 storage/launch tests and the web clinical journeys against backend commit `0b2068438d11f91ed540db3831e0659257b6c605`.
 
 Use `scripts/build-play-bundles.py --environment demo --credentials /private/upload-key.json --gradle /path/to/gradle` for synthetic preflight. The protected JSON contains `store_path`, `alias` (upload) and `password`. Never put it, the private key, credentials or patient data in Git or Play artifacts. Preserve the old upload key until the owner confirms its history; do not replace a published app's signing identity.
 
